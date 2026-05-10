@@ -7,18 +7,20 @@
  * Token-ul se citeste din `<home>/.deploy-token` (fisier in afara document root,
  * inaccesibil prin HTTP). Cream fisierul prin File Manager o singura data.
  *
- * Securitate:
- *  - Token obligatoriu, comparat cu hash_equals (timing-safe)
- *  - HTTPS obligatoriu (refuza HTTP)
- *  - Log apel in storage/logs/deploy.log
+ * Resilient:
+ *  - Fallback automat proc_open / shell_exec / exec / passthru / system
+ *  - Auto-discovery binar PHP (cauta in mai multe locatii standard cPanel)
+ *  - Auto-discovery binar composer; daca lipseste, download composer.phar
  *
- * Resilient la disable_functions: incearca proc_open / shell_exec / exec / passthru
- * in aceasta ordine. Daca toate sunt blocate, afiseaza clar solutiile.
+ * Securitate:
+ *  - Token obligatoriu, timing-safe (hash_equals)
+ *  - HTTPS obligatoriu
+ *  - Log apel in storage/logs/deploy.log
  */
 
 declare(strict_types=1);
 
-// === 1. Forteaza HTTPS ===
+// === 1. HTTPS only ===
 $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
     || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https'
     || ($_SERVER['SERVER_PORT'] ?? '') == 443;
@@ -30,10 +32,14 @@ if (!$isHttps) {
 
 // === 2. Cai ===
 $rootPath = realpath(__DIR__ . '/..');
-$tokenFile = dirname($rootPath) . '/.deploy-token';
+$home = rtrim($_SERVER['HOME'] ?? dirname($rootPath), '/');
+$tokenFile = $home . '/.deploy-token';
 $logFile = $rootPath . '/storage/logs/deploy.log';
 
-// === 3. Verifica token ===
+// Asigura ca storage/logs exista (la primul deploy poate lipsi)
+@mkdir(dirname($logFile), 0775, true);
+
+// === 3. Token ===
 if (!file_exists($tokenFile)) {
     http_response_code(500);
     exit("Token file missing — creeaza {$tokenFile} cu token-ul tau");
@@ -43,16 +49,12 @@ $expectedToken = trim((string) file_get_contents($tokenFile));
 $providedToken = (string) ($_GET['token'] ?? '');
 
 if (empty($expectedToken) || strlen($providedToken) < 16 || !hash_equals($expectedToken, $providedToken)) {
-    @file_put_contents($logFile, sprintf(
-        "[%s] DENIED from %s\n",
-        date('c'),
-        $_SERVER['REMOTE_ADDR'] ?? 'unknown'
-    ), FILE_APPEND);
+    @file_put_contents($logFile, sprintf("[%s] DENIED from %s\n", date('c'), $_SERVER['REMOTE_ADDR'] ?? 'unknown'), FILE_APPEND);
     http_response_code(403);
     exit('Forbidden');
 }
 
-// === 4. Pregateste output streaming ===
+// === 4. Output streaming ===
 @set_time_limit(600);
 ignore_user_abort(true);
 @ini_set('output_buffering', 'off');
@@ -70,8 +72,9 @@ $startTime = microtime(true);
 echo "=== Deploy FlotaMuntenia ===\n";
 echo 'Inceput: ' . date('Y-m-d H:i:s') . "\n";
 echo "Root: {$rootPath}\n";
+echo "Home: {$home}\n";
 
-// === 5. Detecteaza ce executoare sunt disponibile ===
+// === 5. Detecteaza executor shell ===
 $available = [
     'proc_open'  => function_exists('proc_open'),
     'shell_exec' => function_exists('shell_exec'),
@@ -80,7 +83,7 @@ $available = [
     'system'     => function_exists('system'),
 ];
 
-echo "PHP exec methods: ";
+echo 'PHP exec methods: ';
 foreach ($available as $fn => $ok) {
     echo $fn . '=' . ($ok ? 'OK' : 'BLOCKED') . ' ';
 }
@@ -95,118 +98,162 @@ foreach (['proc_open', 'shell_exec', 'exec', 'passthru', 'system'] as $fn) {
 }
 
 if ($executor === null) {
-    echo "\n[FATAL] Toate functiile de executie shell sunt DEZACTIVATE in php.ini.\n\n";
-    echo "Functii necesare (cel putin una): proc_open, shell_exec, exec, passthru, system\n\n";
-    echo "SOLUTII:\n";
-    echo " 1) cPanel > Select PHP Version > tab \"Options\" > scoate functia din\n";
-    echo "    'disable_functions' (de regula proc_open e cel mai sigur de activat).\n";
-    echo " 2) Daca optiunea nu apare, cere providerului de hosting sa permita proc_open\n";
-    echo "    pentru contul tau (e safe la directory-level).\n";
-    echo " 3) Alternativa fara shell exec: cron job care ruleaza scriptul de deploy.\n";
-    echo "    Spune-mi sa-ti generez varianta cron daca asta e blocat definitiv.\n";
+    echo "\n[FATAL] Toate functiile de executie shell sunt DEZACTIVATE.\n";
+    echo "cPanel > Select PHP Version > tab Options > scoate proc_open din disable_functions.\n";
     exit(1);
 }
 
-echo "Folosesc: {$executor}\n";
-echo "============================\n";
-@file_put_contents($logFile, sprintf("[%s] DEPLOY START via=%s\n", date('c'), $executor), FILE_APPEND);
+echo "Executor: {$executor}\n";
 
-// === 6. Wrapper unitar peste cele 5 metode ===
+// === 6. Wrapper unitar ===
 function runCommand(string $cmd, string $executor): array
 {
-    $output = '';
-    $code = -1;
-
     if ($executor === 'proc_open') {
-        $descriptors = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
-        $proc = @proc_open($cmd, $descriptors, $pipes);
-        if (is_resource($proc)) {
-            fclose($pipes[0]);
-            $stdout = stream_get_contents($pipes[1]) ?: '';
-            $stderr = stream_get_contents($pipes[2]) ?: '';
-            fclose($pipes[1]);
-            fclose($pipes[2]);
-            $code = proc_close($proc);
-            $output = $stdout;
-            if ($stderr !== '') {
-                $output .= ($output !== '' ? "\n" : '') . '[stderr] ' . $stderr;
-            }
-            return [$output, $code];
+        $desc = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        $proc = @proc_open($cmd, $desc, $pipes);
+        if (!is_resource($proc)) {
+            return ['proc_open failed', -1];
         }
-        return ['proc_open failed to start', -1];
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]) ?: '';
+        $stderr = stream_get_contents($pipes[2]) ?: '';
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $code = proc_close($proc);
+        $output = $stdout;
+        if ($stderr !== '') {
+            $output .= ($output !== '' ? "\n" : '') . '[stderr] ' . $stderr;
+        }
+        return [$output, $code];
     }
-
     if ($executor === 'shell_exec') {
         $res = @shell_exec($cmd . ' 2>&1 ; echo "__EXIT_$?__"');
-        if ($res === null || $res === false) {
-            return ['shell_exec returned null', -1];
-        }
+        if ($res === null) return ['shell_exec null', -1];
+        $code = 0;
         if (preg_match('/__EXIT_(\d+)__/', $res, $m)) {
             $code = (int) $m[1];
             $res = preg_replace('/__EXIT_\d+__\n?/', '', $res);
-        } else {
-            $code = 0;
         }
         return [(string) $res, $code];
     }
-
     if ($executor === 'exec') {
-        $arr = [];
+        $arr = []; $code = -1;
         @exec($cmd . ' 2>&1', $arr, $code);
         return [implode("\n", $arr), $code];
     }
-
     if ($executor === 'passthru') {
-        ob_start();
+        ob_start(); $code = -1;
         @passthru($cmd . ' 2>&1', $code);
         return [(string) ob_get_clean(), $code];
     }
-
     if ($executor === 'system') {
-        ob_start();
+        ob_start(); $code = -1;
         @system($cmd . ' 2>&1', $code);
         return [(string) ob_get_clean(), $code];
     }
-
-    return ['no executor', -1];
+    return ['unknown executor', -1];
 }
 
-// === 7. Comenzi de rulat ===
-$php = '/usr/local/bin/php';
-$composer = '/usr/local/bin/composer';
+// === 7. Auto-discovery binar PHP ===
+function findFirst(array $candidates): ?string
+{
+    foreach ($candidates as $p) {
+        if ($p && @is_file($p)) {
+            return $p;
+        }
+    }
+    return null;
+}
+
+$phpCandidates = [
+    '/opt/cpanel/ea-php83/root/usr/bin/php',
+    '/opt/cpanel/ea-php84/root/usr/bin/php',
+    '/usr/local/bin/php',
+    '/usr/bin/php83',
+    '/opt/alt/php83/usr/bin/php',
+    PHP_BINARY,
+    '/usr/bin/php',
+];
+$php = findFirst($phpCandidates);
+if ($php === null) {
+    echo "[FATAL] Nu gasesc binar PHP. Cauta: " . implode(', ', $phpCandidates) . "\n";
+    exit(1);
+}
+
+[$phpVer, ] = runCommand(escapeshellarg($php) . " -r 'echo PHP_VERSION;'", $executor);
+echo "PHP: {$php} (v{$phpVer})\n";
+
+// === 8. Auto-discovery binar Composer ===
+$composerCandidates = [
+    '/usr/local/bin/composer',
+    '/usr/local/cpanel/3rdparty/bin/composer',
+    $home . '/bin/composer',
+    $home . '/composer.phar',
+    $rootPath . '/composer.phar',
+];
+$composer = findFirst($composerCandidates);
+
+// Fallback: download composer.phar
+if ($composer === null) {
+    echo "Composer nu este instalat — download composer.phar...\n";
+    $pharPath = $rootPath . '/composer.phar';
+    $url = 'https://getcomposer.org/download/latest-stable/composer.phar';
+    $ctx = stream_context_create(['http' => ['timeout' => 30, 'user_agent' => 'flota-deploy/1.0']]);
+    $phar = @file_get_contents($url, false, $ctx);
+    if ($phar === false || strlen($phar) < 100000) {
+        echo "[FATAL] Nu pot descarca composer.phar.\n";
+        echo "Solutie: descarca manual composer.phar de la https://getcomposer.org/composer.phar\n";
+        echo "         si upload prin File Manager in {$home}/composer.phar\n";
+        exit(1);
+    }
+    if (file_put_contents($pharPath, $phar) === false) {
+        echo "[FATAL] Nu pot scrie {$pharPath} (permisiuni).\n";
+        exit(1);
+    }
+    @chmod($pharPath, 0755);
+    $composer = $pharPath;
+    echo "Composer instalat: {$composer} (" . number_format(strlen($phar)) . " bytes)\n";
+}
+
+$composerCmd = (substr($composer, -5) === '.phar')
+    ? escapeshellarg($php) . ' ' . escapeshellarg($composer)
+    : escapeshellarg($composer);
+echo "Composer: {$composer}\n";
+
+echo "============================\n";
+@file_put_contents($logFile, sprintf("[%s] DEPLOY START via=%s\n", date('c'), $executor), FILE_APPEND);
+
+// === 9. Comenzi ===
 $cd = 'cd ' . escapeshellarg($rootPath);
+$phpQ = escapeshellarg($php);
 
 $commands = [
     'Git fetch'                  => "{$cd} && git fetch origin main 2>&1",
     'Git reset hard origin/main' => "{$cd} && git reset --hard origin/main 2>&1",
-    'Composer install'           => "{$cd} && export COMPOSER_HOME={$rootPath}/.composer && {$composer} install --no-dev --optimize-autoloader --no-interaction 2>&1",
-    'Migrate'                    => "{$cd} && {$php} artisan migrate --force 2>&1",
-    'Seed production'            => "{$cd} && {$php} artisan db:seed --class=ProductionSeeder --force --no-interaction 2>&1",
-    'Bootstrap admin'            => "{$cd} && {$php} artisan app:bootstrap-admin 2>&1",
-    'Storage link'               => "{$cd} && {$php} artisan storage:link 2>&1",
-    'Optimize clear'             => "{$cd} && {$php} artisan optimize:clear 2>&1",
-    'Config cache'               => "{$cd} && {$php} artisan config:cache 2>&1",
-    'Route cache'                => "{$cd} && {$php} artisan route:cache 2>&1",
-    'View cache'                 => "{$cd} && {$php} artisan view:cache 2>&1",
-    'Event cache'                => "{$cd} && {$php} artisan event:cache 2>&1",
+    'Composer install'           => "{$cd} && export COMPOSER_HOME={$rootPath}/.composer && {$composerCmd} install --no-dev --optimize-autoloader --no-interaction 2>&1",
+    'Migrate'                    => "{$cd} && {$phpQ} artisan migrate --force 2>&1",
+    'Seed production'            => "{$cd} && {$phpQ} artisan db:seed --class=ProductionSeeder --force --no-interaction 2>&1",
+    'Bootstrap admin'            => "{$cd} && {$phpQ} artisan app:bootstrap-admin 2>&1",
+    'Storage link'               => "{$cd} && {$phpQ} artisan storage:link 2>&1",
+    'Optimize clear'             => "{$cd} && {$phpQ} artisan optimize:clear 2>&1",
+    'Config cache'               => "{$cd} && {$phpQ} artisan config:cache 2>&1",
+    'Route cache'                => "{$cd} && {$phpQ} artisan route:cache 2>&1",
+    'View cache'                 => "{$cd} && {$phpQ} artisan view:cache 2>&1",
+    'Event cache'                => "{$cd} && {$phpQ} artisan event:cache 2>&1",
 ];
 
-// === 8. Ruleaza ===
+// === 10. Ruleaza ===
 $failed = false;
 foreach ($commands as $name => $cmd) {
-    $tStep = microtime(true);
+    $t = microtime(true);
     echo "\n>>> {$name}\n";
-    [$output, $code] = runCommand($cmd, $executor);
-    echo $output !== '' ? $output : '(no output)';
-    $elapsed = round(microtime(true) - $tStep, 2);
+    [$out, $code] = runCommand($cmd, $executor);
+    echo $out !== '' ? $out : '(no output)';
+    $el = round(microtime(true) - $t, 2);
     if ($code === 0) {
-        echo "\n--- OK ({$elapsed}s)\n";
+        echo "\n--- OK ({$el}s)\n";
     } else {
-        echo "\n--- FAIL exit={$code} ({$elapsed}s)\n";
+        echo "\n--- FAIL exit={$code} ({$el}s)\n";
         $failed = true;
     }
 }
@@ -216,9 +263,4 @@ echo "\n============================\n";
 echo $failed ? "STATUS: PARTIAL FAIL\n" : "STATUS: OK\n";
 echo "Total: {$total}s\n";
 
-@file_put_contents($logFile, sprintf(
-    "[%s] DEPLOY END status=%s duration=%ss\n",
-    date('c'),
-    $failed ? 'FAIL' : 'OK',
-    $total
-), FILE_APPEND);
+@file_put_contents($logFile, sprintf("[%s] DEPLOY END status=%s duration=%ss\n", date('c'), $failed ? 'FAIL' : 'OK', $total), FILE_APPEND);
