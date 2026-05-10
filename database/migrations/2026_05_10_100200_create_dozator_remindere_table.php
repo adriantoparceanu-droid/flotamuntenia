@@ -18,6 +18,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Cleanup eventual partial state dintr-o rulare anterioara esuata
+        // (vezi commit-ul precedent: FK pe trimis_de a esuat la primul deploy).
+        Schema::dropIfExists('dozator_remindere');
+
         Schema::create('dozator_remindere', function (Blueprint $table) {
             $table->id();
 
@@ -26,7 +30,10 @@ return new class extends Migration
                 ->cascadeOnUpdate()
                 ->cascadeOnDelete();
 
+            // nullable() obligatoriu pentru nullOnDelete — MySQL refuza FK cu
+            // ON DELETE SET NULL pe coloana NOT NULL (errno 150).
             $table->foreignId('trimis_de')
+                ->nullable()
                 ->constrained('users')
                 ->cascadeOnUpdate()
                 ->nullOnDelete();
