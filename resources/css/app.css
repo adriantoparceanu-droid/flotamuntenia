@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Alpine x-cloak: ascunde elementele cu directiva pana cand Alpine se initializeaza.
+ * Folosit pe sectiunile colapsibile din sidebar (Faza UX 2026-05-10) pentru a evita
+ * FOUC (flash-of-unstyled-content) — secțiunile sa nu apara expandate inainte de
+ * citirea localStorage si aplicarea x-show. */
+[x-cloak] {
+    display: none !important;
+}
