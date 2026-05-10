@@ -1,0 +1,23 @@
+---
+# Script de deploy automat cPanel — ruleaza la "Deploy HEAD Commit"
+# din Git Version Control. NU necesita Terminal SSH.
+#
+# IMPORTANT:
+# - PHP CLI default trebuie sa fie 8.3 (cPanel > MultiPHP CLI Manager)
+# - Composer trebuie sa fie disponibil la /usr/local/bin/composer
+# - .env trebuie sa existe deja (creat manual prin File Manager prima data)
+#
+# Toate comenzile sunt idempotente — pot rula de cate ori e nevoie.
+deployment:
+  tasks:
+    - export COMPOSER_HOME="${HOME}/.composer"
+    - /usr/local/bin/composer install --no-dev --optimize-autoloader --no-interaction --quiet
+    - /usr/local/bin/php artisan migrate --force
+    - /usr/local/bin/php artisan db:seed --class=ProductionSeeder --force --no-interaction
+    - /usr/local/bin/php artisan app:bootstrap-admin
+    - /usr/local/bin/php artisan storage:link
+    - /usr/local/bin/php artisan optimize:clear
+    - /usr/local/bin/php artisan config:cache
+    - /usr/local/bin/php artisan route:cache
+    - /usr/local/bin/php artisan view:cache
+    - /usr/local/bin/php artisan event:cache
