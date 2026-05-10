@@ -234,7 +234,6 @@ $commands = [
     'Migrate'                    => "{$cd} && {$phpQ} artisan migrate --force 2>&1",
     'Seed production'            => "{$cd} && {$phpQ} artisan db:seed --class=ProductionSeeder --force --no-interaction 2>&1",
     'Bootstrap admin'            => "{$cd} && {$phpQ} artisan app:bootstrap-admin 2>&1",
-    'Storage link'               => "{$cd} && {$phpQ} artisan storage:link 2>&1",
     'Optimize clear'             => "{$cd} && {$phpQ} artisan optimize:clear 2>&1",
     'Config cache'               => "{$cd} && {$phpQ} artisan config:cache 2>&1",
     'Route cache'                => "{$cd} && {$phpQ} artisan route:cache 2>&1",
@@ -256,6 +255,33 @@ foreach ($commands as $name => $cmd) {
         echo "\n--- FAIL exit={$code} ({$el}s)\n";
         $failed = true;
     }
+}
+
+// === 11. Storage symlink — PHP nativ (artisan storage:link foloseste exec()
+//        care e dezactivat pe acest hosting) ===
+$tStep = microtime(true);
+echo "\n>>> Storage link (PHP native)\n";
+$linkTarget = $rootPath . '/storage/app/public';
+$linkPath = $rootPath . '/public/storage';
+
+@mkdir($linkTarget, 0775, true);
+
+if (file_exists($linkPath) || is_link($linkPath)) {
+    echo "Symlink/file exista deja la {$linkPath}\n";
+    echo '--- OK (' . round(microtime(true) - $tStep, 2) . "s)\n";
+} elseif (!function_exists('symlink')) {
+    echo "[FAIL] symlink() este DEZACTIVAT in disable_functions.\n";
+    echo "Solutie: cPanel > Select PHP Version > Options > scoate symlink.\n";
+    echo '--- FAIL (' . round(microtime(true) - $tStep, 2) . "s)\n";
+    $failed = true;
+} elseif (@symlink($linkTarget, $linkPath)) {
+    echo "Symlink creat: {$linkPath} -> {$linkTarget}\n";
+    echo '--- OK (' . round(microtime(true) - $tStep, 2) . "s)\n";
+} else {
+    $err = error_get_last();
+    echo '[FAIL] symlink() a esuat: ' . ($err['message'] ?? 'unknown') . "\n";
+    echo '--- FAIL (' . round(microtime(true) - $tStep, 2) . "s)\n";
+    $failed = true;
 }
 
 $total = round(microtime(true) - $startTime, 2);
