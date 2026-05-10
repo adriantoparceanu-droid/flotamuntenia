@@ -1,5 +1,6 @@
 /.phpunit.cache
 /node_modules
+/.deploy-token
 # /public/build este COMMIT-uit intentionat — cPanel shared nu are npm/Vite
 # Build-ul se face local cu `npm run build` inainte de fiecare git push.
 /public/hot

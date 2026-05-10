@@ -157,24 +157,64 @@ Git Version Control → Manage → Deploy HEAD Commit (chiar dacă nu s-a schimb
 
 ---
 
-## Update-uri ulterioare *(workflow standard)*
+## Update-uri ulterioare *(workflow standard — deploy prin URL HTTPS)*
+
+După primul deploy reușit, NU mai e nevoie să intri în cPanel pentru deploy-uri viitoare. Există un **webhook PHP** la `public/deploy.php` care face TOTUL (git pull + composer + migrate + cache).
+
+### Pregătire one-time pentru webhook *(DOAR la primul deploy)*
+
+1. cPanel → **File Manager** → activează "Show Hidden Files"
+2. Navighează la `/home/flotamun/` *(home folder, NU în `flotamuntenia/`)*
+3. **+ File** → numele fișierului: `.deploy-token`
+4. Edit `.deploy-token` → paste-uiește **doar token-ul, fără ghilimele, fără spații, fără newline**:
+   ```
+   da3149b7a4cd0f9b24dfda8fd9315584fbd702bff975d94c63399b0f865c28d0
+   ```
+5. Save
+
+### Workflow de deploy
 
 **Pe local:**
 ```bash
-# 1. faci modificări la cod
-npm run build              # rebuild asset-uri Tailwind/Vite (DOAR dacă ai modificat CSS/JS/Blade)
+# 1. modifici cod
+npm run build              # DOAR dacă ai modificat CSS/JS/Blade
 git add .
-git commit -m "deploy: <mesaj_descriptiv>"
+git commit -m "deploy: <mesaj>"
 git push origin main
 ```
 
-**În cPanel:**
-1. Git Version Control → Manage repo
-2. **Update from Remote** *(pull)*
-3. **Deploy HEAD Commit** *(rulează .cpanel.yml)*
-4. Verifică log-ul → ar trebui să fie green
+**Pe browser (oriunde):**
+Deschide:
+```
+https://app.flotamuntenia.ro/deploy.php?token=da3149b7a4cd0f9b24dfda8fd9315584fbd702bff975d94c63399b0f865c28d0
+```
 
-> Pentru schimbări fără asset-uri/migrații noi, deploy-ul durează ~10-20s.
+Vei vedea log-ul deploy-ului în timp real:
+- `>>> Git fetch ... OK`
+- `>>> Git reset hard origin/main ... OK`
+- `>>> Composer install ... OK`
+- `>>> Migrate ... OK`
+- `>>> Seed production ... OK`
+- `>>> Storage link ... OK`
+- `>>> Config cache ... OK`
+- ...
+- `STATUS: OK`
+
+> 💡 **Salvează URL-ul ca bookmark** — un click = deploy.
+>
+> ⚠️ **NU partaja URL-ul** — oricine îl are poate forța deploy.
+>
+> ⚠️ Token-ul este în `~/.deploy-token` pe server (nu în git). Dacă bănuiești compromitere: înlocuiește-l prin File Manager.
+
+### Cum funcționează `deploy.php`
+
+- Verifică token-ul cu comparație timing-safe (`hash_equals`)
+- Forțează HTTPS (refuză HTTP)
+- Rulează aceleași comenzi ca `.cpanel.yml`, dar prin `shell_exec()`
+- Loghează fiecare apel (succes/eșec) în `storage/logs/deploy.log`
+- Continuă chiar dacă o comandă eșuează (vrei să vezi toate erorile, nu doar prima)
+
+> Dacă `shell_exec()` e dezactivat în `php.ini`, primești mesaj clar cu soluția. În cPanel se rezolvă din **Select PHP Version → Options → disable_functions** (scoate `shell_exec`).
 
 ---
 
