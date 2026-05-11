@@ -19,12 +19,17 @@ class CostProductSeeder extends Seeder
         $tva19 = Tva::firstWhere('valoare', 19.00);
         $tva9 = Tva::firstWhere('valoare', 9.00);
 
+        // ATENTIE: NU includem `pret` in array-ul updateOrCreate.
+        // Motivul: utilizatorul poate edita preturile prin UI in productie;
+        // daca am pus `pret` aici, deploy-ul urmator ar reseta preturile la 0.
+        // La primul create, coloana foloseste default-ul DB (0.00, vezi migrare).
+        // La update, pretul existent ramane neschimbat.
         $produseCheie = [
-            ['id' => 45, 'denumire' => 'APA PLATA 19L', 'id_category' => $apa?->id, 'id_tva' => $tva9?->id ?? $tva19?->id, 'pret' => 0.00],
-            ['id' => 46, 'denumire' => 'APA PLATA 11L', 'id_category' => $apa?->id, 'id_tva' => $tva9?->id ?? $tva19?->id, 'pret' => 0.00],
-            ['id' => 47, 'denumire' => 'DOZATOR PODEA', 'id_category' => $dozatoare?->id, 'id_tva' => $tva19?->id, 'pret' => 0.00],
-            ['id' => 52, 'denumire' => 'DOZATOR CUSTODIE', 'id_category' => $dozatoare?->id, 'id_tva' => $tva19?->id, 'pret' => 0.00],
-            ['id' => 55, 'denumire' => 'DOZATOR CU FILTRE - Custodie', 'id_category' => $dozatoare?->id, 'id_tva' => $tva19?->id, 'pret' => 0.00],
+            ['id' => 45, 'denumire' => 'APA PLATA 19L', 'id_category' => $apa?->id, 'id_tva' => $tva9?->id ?? $tva19?->id],
+            ['id' => 46, 'denumire' => 'APA PLATA 11L', 'id_category' => $apa?->id, 'id_tva' => $tva9?->id ?? $tva19?->id],
+            ['id' => 47, 'denumire' => 'DOZATOR PODEA', 'id_category' => $dozatoare?->id, 'id_tva' => $tva19?->id],
+            ['id' => 52, 'denumire' => 'DOZATOR CUSTODIE', 'id_category' => $dozatoare?->id, 'id_tva' => $tva19?->id],
+            ['id' => 55, 'denumire' => 'DOZATOR CU FILTRE - Custodie', 'id_category' => $dozatoare?->id, 'id_tva' => $tva19?->id],
         ];
 
         foreach ($produseCheie as $p) {
@@ -34,7 +39,6 @@ class CostProductSeeder extends Seeder
                     'denumire' => $p['denumire'],
                     'id_category' => $p['id_category'],
                     'id_tva' => $p['id_tva'],
-                    'pret' => $p['pret'],
                     'activ' => true,
                 ]
             );
