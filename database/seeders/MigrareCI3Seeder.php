@@ -792,7 +792,7 @@ class MigrareCI3Seeder extends Seeder
                 'recuperati'     => (int) ($r['recuperati'] ?? 0),
                 'lasati_11l'     => (int) ($r['nr_recipienti_11L'] ?? 0),
                 'recuperati_11l' => (int) ($r['recuperati_11L'] ?? 0),
-                'data'           => $r['data'] ?? date('Y-m-d'),
+                'data'           => $this->parseData($r['data'] ?? null) ?? date('Y-m-d'),
                 'id_comanda'     => null,
                 'observatii'     => $this->nullIfEmpty($r['observatii'] ?? null),
                 'created_at'     => $now,
@@ -847,7 +847,7 @@ class MigrareCI3Seeder extends Seeder
                 'id_produs'          => $idProdus,
                 'serie'              => $this->nullIfEmpty($r['nr_inventar'] ?? null),
                 'tranzactie'         => $tranzactie,
-                'data_instalare'     => $r['data_lasare'] ?? date('Y-m-d'),
+                'data_instalare'     => $this->parseData($r['data_lasare'] ?? null) ?? date('Y-m-d'),
                 'comanda'            => (bool) ($r['comanda'] ?? 0),
                 'activ'              => (int) ($r['status'] ?? 1) === 1,
                 'perioada_igenizare' => $this->parseData($r['perioada_igenizare'] ?? null, '/'),
@@ -880,10 +880,14 @@ class MigrareCI3Seeder extends Seeder
     /** Parsează date din format variabil (cu separator / sau -) → "Y-m-d" sau null */
     private function parseData(?string $raw, string $separator = '-'): ?string
     {
-        if (empty($raw) || $raw === '-') return null;
+        if (empty($raw) || $raw === '-' || $raw === '0') return null;
         $normalized = str_replace($separator, '-', trim($raw));
+        // Respingem datele zero (0000-00-00) — MySQL strict mode le refuza
+        if (str_starts_with($normalized, '0000') || $normalized === '0000-00-00') return null;
         try {
-            return Carbon::parse($normalized)->format('Y-m-d');
+            $d = Carbon::parse($normalized);
+            if ($d->year < 1970 || $d->year > 2035) return null; // range rezonabil
+            return $d->format('Y-m-d');
         } catch (\Throwable) {
             return null;
         }
