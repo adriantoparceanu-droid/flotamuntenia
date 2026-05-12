@@ -24,13 +24,13 @@ return new class extends Migration
             // Adresa fizica
             $table->string('oras', 100)->nullable();
             $table->string('strada', 255)->nullable();
-            $table->string('nr', 20)->nullable();
-            $table->string('bloc', 20)->nullable();
-            $table->string('scara', 10)->nullable();
-            $table->string('etaj', 10)->nullable();
-            $table->string('apartament', 20)->nullable();
-            $table->string('sector', 20)->nullable();
-            $table->string('interfon', 20)->nullable();
+            $table->string('nr', 50)->nullable();
+            $table->string('bloc', 100)->nullable();
+            $table->string('scara', 50)->nullable();
+            $table->string('etaj', 50)->nullable();
+            $table->string('apartament', 50)->nullable();
+            $table->string('sector', 50)->nullable();
+            $table->string('interfon', 50)->nullable();
 
             // GPS — doua coloane separate (regula §8.9). Nullable pentru ca nu toti clientii au GPS.
             $table->decimal('lat', 10, 8)->nullable();

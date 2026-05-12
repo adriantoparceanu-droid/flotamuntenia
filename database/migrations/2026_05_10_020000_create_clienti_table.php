@@ -18,23 +18,23 @@ return new class extends Migration
             $table->string('denumire', 255)->comment('Denumire firma sau nume complet PF');
 
             // Date juridice (relevante pentru PJ)
-            $table->string('cif', 20)->nullable()->comment('CIF pentru PJ, CNP pentru PF');
-            $table->string('reg_com', 50)->nullable();
+            $table->string('cif', 100)->nullable()->comment('CIF pentru PJ, CNP pentru PF');
+            $table->string('reg_com', 100)->nullable();
 
             // Adresa sediu / domiciliu
             $table->string('oras', 100)->nullable();
             $table->string('strada', 255)->nullable();
-            $table->string('nr', 20)->nullable();
-            $table->string('bloc', 20)->nullable();
-            $table->string('scara', 10)->nullable();
-            $table->string('etaj', 10)->nullable();
-            $table->string('apartament', 20)->nullable();
-            $table->string('sector', 20)->nullable();
-            $table->string('interfon', 20)->nullable();
+            $table->string('nr', 50)->nullable();
+            $table->string('bloc', 100)->nullable();
+            $table->string('scara', 50)->nullable();
+            $table->string('etaj', 50)->nullable();
+            $table->string('apartament', 50)->nullable();
+            $table->string('sector', 50)->nullable();
+            $table->string('interfon', 50)->nullable();
 
             // Contact
             $table->string('email', 255)->nullable();
-            $table->string('telefon', 20)->nullable();
+            $table->string('telefon', 100)->nullable();
 
             $table->text('observatii')->nullable();
 
