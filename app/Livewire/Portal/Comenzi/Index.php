@@ -69,7 +69,7 @@ class Index extends Component
                 match ($this->filtruStatus) {
                     'in_asteptare' => $q->where('status', Comanda::STATUS_IN_ASTEPTARE),
                     'respinse' => $q->where('status', Comanda::STATUS_RESPINS),
-                    'aprobate' => $q->whereNull('status')->where('livrat', false),
+                    'aprobate' => $q->vizibile()->where('livrat', false),
                     'livrate' => $q->where('livrat', true),
                     default => null,
                 };

@@ -299,7 +299,7 @@ class Traseu extends Component
                 ->with(['client', 'adresa', 'produse.produs'])
                 ->where('id_masina', $idMasina)
                 ->whereDate('data_livrare', $this->data)
-                ->whereNull('status')
+                ->vizibile()
                 ->orderBy('ordine_traseu')
                 ->orderBy('id')
                 ->get();

@@ -275,7 +275,7 @@ class ListaZilnica extends Component
         $qClasice = Comanda::query()
             ->with(['client', 'adresa', 'depozit', 'produse.produs'])
             ->whereDate('data_livrare', $this->data)
-            ->whereNull('status'); // ascundem 'In asteptare' (portal client)
+            ->vizibile();
 
         $qRapide = ComandaRapida::query()
             ->with(['depozit', 'produse.produs'])

@@ -20,6 +20,7 @@ class Comanda extends Model
     public const MODPLATA_ALTA = 4;
 
     public const STATUS_IN_ASTEPTARE = 'In asteptare';
+    public const STATUS_APROBATA = 'Aprobata';
     public const STATUS_RESPINS = 'Respins';
 
     protected $fillable = [
@@ -134,6 +135,18 @@ class Comanda extends Model
     public function isRespinsa(): bool
     {
         return $this->status === self::STATUS_RESPINS;
+    }
+
+    /**
+     * Scope: comenzi vizibile in liste operative (admin + sofer).
+     * Include status=null (create direct de admin) si status='Aprobata' (aprobate din portal).
+     * Exclude 'In asteptare' si 'Respins'.
+     */
+    public function scopeVizibile($query)
+    {
+        return $query->where(function ($q) {
+            $q->whereNull('status')->orWhere('status', self::STATUS_APROBATA);
+        });
     }
 
     /**

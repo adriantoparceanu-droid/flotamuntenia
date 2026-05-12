@@ -23,7 +23,7 @@ class TopClienti extends Component
             ->withCount(['comenzi' => function ($q) use ($an, $luna) {
                 $q->whereYear('data_livrare', $an)
                   ->whereMonth('data_livrare', $luna)
-                  ->whereNull('status');
+                  ->vizibile();
             }])
             ->orderByDesc('comenzi_count')
             ->limit(10)

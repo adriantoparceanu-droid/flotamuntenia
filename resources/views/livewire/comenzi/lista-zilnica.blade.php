@@ -235,6 +235,13 @@
                                         @else
                                             <span class="text-gray-400 italic">—</span>
                                         @endif
+                                        @if($i['lat'] === null || $i['lng'] === null)
+                                            <span class="inline-flex items-center gap-0.5 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200"
+                                                  title="Adresa nu are coordonate GPS — pinul nu apare pe harta">
+                                                <x-heroicon-m-map-pin class="w-3 h-3" />
+                                                Fara GPS
+                                            </span>
+                                        @endif
                                     </td>
 
                                     {{-- Produse / Descriere --}}

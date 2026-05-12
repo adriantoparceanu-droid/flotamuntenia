@@ -32,13 +32,13 @@ class Soferi extends Component
             $asignate = Comanda::where('id_masina', $m->id)
                 ->whereYear('data_livrare', $an)
                 ->whereMonth('data_livrare', $luna)
-                ->whereNull('status')
+                ->vizibile()
                 ->count();
 
             $livrate = Comanda::where('id_masina', $m->id)
                 ->whereYear('data_livrare', $an)
                 ->whereMonth('data_livrare', $luna)
-                ->whereNull('status')
+                ->vizibile()
                 ->where('livrat', true)
                 ->count();
 

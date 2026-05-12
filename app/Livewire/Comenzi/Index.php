@@ -160,7 +160,7 @@ class Index extends Component
         if ($this->filtruStatus === 'livrate') {
             $q->where('livrat', true);
         } elseif ($this->filtruStatus === 'nelivrate') {
-            $q->where('livrat', false)->whereNull('status');
+            $q->where('livrat', false)->vizibile();
         } elseif ($this->filtruStatus === 'in_asteptare') {
             $q->where('status', Comanda::STATUS_IN_ASTEPTARE);
         } elseif ($this->filtruStatus === 'respinse') {

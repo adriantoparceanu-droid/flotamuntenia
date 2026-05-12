@@ -58,14 +58,14 @@ class Dashboard extends Component
     #[Computed]
     public function comenziAzi(): int
     {
-        return Comanda::whereDate('data_livrare', today())->whereNull('status')->count();
+        return Comanda::whereDate('data_livrare', today())->vizibile()->count();
     }
 
     #[Computed]
     public function comenziNelivrateAzi(): int
     {
         return Comanda::whereDate('data_livrare', today())
-            ->whereNull('status')
+            ->vizibile()
             ->where('livrat', false)
             ->count();
     }
@@ -86,7 +86,7 @@ class Dashboard extends Component
     {
         return (int) Comanda::whereYear('data_livrare', now()->year)
             ->whereMonth('data_livrare', now()->month)
-            ->whereNull('status')
+            ->vizibile()
             ->where('livrat', true)
             ->sum('nr_recipienti');
     }
@@ -96,7 +96,7 @@ class Dashboard extends Component
     {
         return (int) Comanda::whereYear('data_livrare', now()->year)
             ->whereMonth('data_livrare', now()->month)
-            ->whereNull('status')
+            ->vizibile()
             ->where('livrat', true)
             ->sum('nr_pahare');
     }
@@ -143,7 +143,7 @@ class Dashboard extends Component
         $alerte = [];
 
         $nealocate = Comanda::whereDate('data_livrare', today())
-            ->whereNull('status')
+            ->vizibile()
             ->where(function ($q) {
                 $q->whereNull('id_masina')->orWhere('id_masina', 0);
             })
@@ -198,7 +198,7 @@ class Dashboard extends Component
 
         // Group in PHP pentru portabilitate SQLite/MariaDB (evitam date() function)
         $comenzi = Comanda::whereBetween('data_livrare', [$start->toDateString(), $azi->toDateString()])
-            ->whereNull('status')
+            ->vizibile()
             ->get(['data_livrare', 'livrat'])
             ->groupBy(fn ($c) => $c->data_livrare->toDateString());
 
@@ -245,7 +245,7 @@ class Dashboard extends Component
     {
         $tipuri = Comanda::whereYear('data_livrare', now()->year)
             ->whereMonth('data_livrare', now()->month)
-            ->whereNull('status')
+            ->vizibile()
             ->selectRaw('tip_comanda, count(*) as nr')
             ->groupBy('tip_comanda')
             ->pluck('nr', 'tip_comanda')
@@ -292,7 +292,7 @@ class Dashboard extends Component
 
         // Incasari per luna — eager load produse pentru a calcula totalul comenzii
         $vanzariPerLuna = Comanda::with('produse')
-            ->whereNull('status')
+            ->vizibile()
             ->where('livrat', true)
             ->whereBetween('data_livrare', [$start->toDateString(), $end->toDateString()])
             ->get()
