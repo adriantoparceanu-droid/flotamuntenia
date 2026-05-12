@@ -26,14 +26,23 @@ class MigrareCI3Seeder extends Seeder
 
     public function run(): void
     {
-        // Calea față de base_path() al app-noua = 2 directoare mai sus
-        $this->sqlPath = base_path('../analiza-app/flotamun_clienti.sql');
+        // Căutăm SQL-ul în mai multe locații (local vs. producție)
+        $candidati = [
+            storage_path('app/flotamun_clienti.sql'),          // producție: upload în storage/app/
+            base_path('../analiza-app/flotamun_clienti.sql'),   // local: monorepo
+        ];
+        $this->sqlPath = '';
+        foreach ($candidati as $cale) {
+            if (file_exists($cale)) { $this->sqlPath = $cale; break; }
+        }
 
-        if (!file_exists($this->sqlPath)) {
-            $this->command->error("Fișierul SQL nu există: {$this->sqlPath}");
-            $this->command->error("Asigurați-vă că analiza-app/flotamun_clienti.sql există.");
+        if (!$this->sqlPath) {
+            $this->command->error('Fișierul flotamun_clienti.sql nu a fost găsit.');
+            $this->command->error('Pe producție: încărcați-l în storage/app/flotamun_clienti.sql');
+            $this->command->error('Local: asigurați-vă că analiza-app/flotamun_clienti.sql există.');
             return;
         }
+        $this->command->line("SQL: {$this->sqlPath}");
 
         $this->command->info('─── Parsare fișier SQL ───');
         $this->parseSql();
