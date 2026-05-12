@@ -432,13 +432,18 @@ class MigrareCI3Seeder extends Seeder
                 $denumire = 'Adresă #' . $r['id'];
             }
 
-            // data_prima_comanda: "2026/02" → "2026-02-01"
+            // data_prima_comanda: "2026/02" sau "02/2026" → "2026-02-01"
             $dataAdaugare = null;
             $dp = trim($r['data_prima_comanda'] ?? '');
             if ($dp) {
                 $p = explode('/', $dp);
                 if (count($p) >= 2) {
-                    $dataAdaugare = $p[0] . '-' . str_pad($p[1], 2, '0', STR_PAD_LEFT) . '-01';
+                    // Detectam care parte e anul (4 cifre) si care e luna
+                    $an  = strlen($p[0]) === 4 ? $p[0] : $p[1];
+                    $luna = strlen($p[0]) === 4 ? $p[1] : $p[0];
+                    if (is_numeric($an) && is_numeric($luna)) {
+                        $dataAdaugare = $an . '-' . str_pad($luna, 2, '0', STR_PAD_LEFT) . '-01';
+                    }
                 }
             }
 
