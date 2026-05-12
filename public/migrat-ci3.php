@@ -66,7 +66,7 @@ flush();
 // ── Pas 2: MigrareCI3Seeder ───────────────────────────────────────────────────
 echo ">>> db:seed --class=MigrareCI3Seeder\n";
 flush();
-$r = ruleazaComanda($php, $root, 'db:seed --class=MigrareCI3Seeder');
+$r = ruleazaComanda($php, $root, 'db:seed --class=MigrareCI3Seeder --force');
 echo $r['output'];
 if ($r['code'] === 0) {
     echo "--- OK ({$r['timp']}s)\n\n";
