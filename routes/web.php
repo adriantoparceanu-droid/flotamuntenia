@@ -134,7 +134,7 @@ Route::middleware(['auth', 'rol:client'])->prefix('portal')->name('portal.')->gr
 
 // Rute gestiune (tip=10)
 Route::middleware(['auth', 'rol:gestiune'])->prefix('gestiune')->name('gestiune.')->group(function () {
-    Route::view('comenzi', 'gestiune.comenzi')->name('comenzi');
+    Route::get('comenzi', \App\Livewire\Gestiune\ListaComenzi::class)->name('comenzi');
 });
 
 // Profil — accesibil tuturor utilizatorilor autentificati

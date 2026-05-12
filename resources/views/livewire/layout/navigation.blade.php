@@ -175,7 +175,7 @@ new class extends Component
             {{-- Clientii (tip=3) folosesc layout dedicat portal.blade.php cu navigation propriu --}}
 
             @if(auth()->user()->isGestiune())
-                <x-sidebar-link icon="clipboard-document-list" href="#" :active="request()->routeIs('gestiune.*')">Comenzi</x-sidebar-link>
+                <x-sidebar-link icon="clipboard-document-list" :href="route('gestiune.comenzi')" :active="request()->routeIs('gestiune.comenzi')">Comenzi</x-sidebar-link>
                 <x-sidebar-link icon="document-text" href="#" :active="false">Foaie de parcurs</x-sidebar-link>
             @endif
         </nav>
