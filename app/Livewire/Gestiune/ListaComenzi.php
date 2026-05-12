@@ -42,8 +42,17 @@ class ListaComenzi extends Component
 
     public function render()
     {
-        $masini  = Car::where('activ', true)->orderBy('denumire')->get();
+        $masini   = Car::where('activ', true)->orderBy('denumire')->get();
         $depozite = Deposit::where('activ', true)->orderBy('denumire')->get();
+
+        // Label afisat in headerul casetei Observatii
+        if ($this->filtruMasina === '') {
+            $labelFiltruMasina = 'Toate masinile';
+        } elseif ($this->filtruMasina === '0') {
+            $labelFiltruMasina = 'Nealocate';
+        } else {
+            $labelFiltruMasina = $masini->find((int) $this->filtruMasina)?->denumire ?? 'Masina selectata';
+        }
 
         $aplicaFiltruMasina = function ($q) {
             if ($this->filtruMasina === '') {
@@ -56,7 +65,7 @@ class ListaComenzi extends Component
         };
 
         $qClasice = Comanda::query()
-            ->with(['client', 'adresa', 'produse.produs', 'masina'])
+            ->with(['client', 'masina', 'produse.produs'])
             ->vizibile()
             ->whereDate('data_livrare', $this->data);
 
@@ -65,7 +74,7 @@ class ListaComenzi extends Component
             ->whereDate('data_livrare', $this->data);
 
         $qProbleme = Problema::query()
-            ->with(['client', 'adresa'])
+            ->with(['client'])
             ->whereDate('data_livrare', $this->data);
 
         if ($this->idDepozit) {
@@ -78,19 +87,15 @@ class ListaComenzi extends Component
         $rapide   = $aplicaFiltruMasina($qRapide)->orderBy('ordine_traseu')->orderBy('id')->get();
         $probleme = $aplicaFiltruMasina($qProbleme)->orderBy('ordine_traseu')->orderBy('id')->get();
 
-        // ---- Tabel 1: comenzi cu observatii ----
+        // ---- Tabel Observatii (doar Nume + Observatii) ----
         $cuObservatii = collect();
 
         foreach ($clasice as $c) {
             if (filled($c->observatii)) {
                 $cuObservatii->push([
-                    'tip'      => $c->etichetaTip(),
-                    'tip_cod'  => $c->tip_comanda,
-                    'nume'     => $c->client?->denumire ?? ($c->nume ?: '?'),
-                    'adresa'   => $c->adresa?->adresaCompleta() ?: '',
-                    'obs'      => $c->observatii,
-                    'masina'   => $c->masina?->denumire ?? '—',
-                    'ordine'   => (int) $c->ordine_traseu,
+                    'nume'   => $c->client?->denumire ?? ($c->nume ?: '?'),
+                    'obs'    => $c->observatii,
+                    'ordine' => (int) $c->ordine_traseu,
                 ]);
             }
         }
@@ -98,13 +103,9 @@ class ListaComenzi extends Component
         foreach ($rapide as $c) {
             if (filled($c->observatii)) {
                 $cuObservatii->push([
-                    'tip'     => 'Rapida',
-                    'tip_cod' => 'rapida',
-                    'nume'    => $c->denumire,
-                    'adresa'  => $c->adresa ?: '',
-                    'obs'     => $c->observatii,
-                    'masina'  => '—',
-                    'ordine'  => (int) $c->ordine_traseu,
+                    'nume'   => $c->denumire,
+                    'obs'    => $c->observatii,
+                    'ordine' => (int) $c->ordine_traseu,
                 ]);
             }
         }
@@ -112,60 +113,84 @@ class ListaComenzi extends Component
         foreach ($probleme as $p) {
             if (filled($p->observatii)) {
                 $cuObservatii->push([
-                    'tip'     => 'Problema',
-                    'tip_cod' => 'problema',
-                    'nume'    => $p->client?->denumire ?? ($p->nume ?: '?'),
-                    'adresa'  => $p->adresa?->adresaCompleta() ?: '',
-                    'obs'     => $p->observatii,
-                    'masina'  => '—',
-                    'ordine'  => (int) $p->ordine_traseu,
+                    'nume'   => $p->client?->denumire ?? ($p->nume ?: '?'),
+                    'obs'    => $p->observatii,
+                    'ordine' => (int) $p->ordine_traseu,
                 ]);
             }
         }
 
-        $cuObservatii = $cuObservatii->sortBy(fn ($i) => [$i['ordine'] ?: 999999])->values();
+        $cuObservatii = $cuObservatii->sortBy(fn ($i) => $i['ordine'] ?: 999999)->values();
 
-        // ---- Tabel 2: sumar produse ----
-        // Agregam cantitati per denumire produs din comenzi clasice + rapide
-        $sumarProduse = collect();
+        // ---- Sumar produse: total + per masina ----
+        // [masina_key => ['key'=>'masina_0', 'denumire'=>'Iveco 01', 'culoare'=>'#...', 'produse'=>[...], 'total'=>N]]
+        $produseTotale = [];   // [denumire => cantitate]
+        $produsePerMasina = []; // [masina_key => ['denumire'=>..., 'culoare'=>..., 'produse'=>[...]]]
+
+        $rezolvaMasina = function (Comanda|ComandaRapida $c) use ($masini): array {
+            $idM = $c->id_masina;
+            if (! $idM) {
+                return ['key' => 'nealocate', 'denumire' => 'Nealocate', 'culoare' => '#9ca3af'];
+            }
+            $car = $masini->find($idM);
+            return [
+                'key'      => 'masina_' . $idM,
+                'denumire' => $car?->denumire ?? 'Masina #' . $idM,
+                'culoare'  => $car?->culoare ?: '#3b82f6',
+            ];
+        };
+
+        $adaugaProdus = function (string $masinaKey, string $masinaDenumire, string $masinaCuloare, string $denumire, int $cantitate) use (&$produseTotale, &$produsePerMasina): void {
+            if ($cantitate <= 0) {
+                return;
+            }
+            $produseTotale[$denumire] = ($produseTotale[$denumire] ?? 0) + $cantitate;
+
+            if (! isset($produsePerMasina[$masinaKey])) {
+                $produsePerMasina[$masinaKey] = [
+                    'key'      => $masinaKey,
+                    'denumire' => $masinaDenumire,
+                    'culoare'  => $masinaCuloare,
+                    'produse'  => [],
+                ];
+            }
+            $produsePerMasina[$masinaKey]['produse'][$denumire] = ($produsePerMasina[$masinaKey]['produse'][$denumire] ?? 0) + $cantitate;
+        };
 
         foreach ($clasice as $c) {
+            $m = $rezolvaMasina($c);
             foreach ($c->produse as $linie) {
-                $denumire = $linie->produs?->denumire ?? 'Produs necunoscut';
-                $cantitate = (int) $linie->cantitate;
-                if ($cantitate > 0) {
-                    $sumarProduse->push(['denumire' => $denumire, 'cantitate' => $cantitate]);
-                }
+                $adaugaProdus($m['key'], $m['denumire'], $m['culoare'], $linie->produs?->denumire ?? 'Produs necunoscut', (int) $linie->cantitate);
             }
         }
 
         foreach ($rapide as $c) {
+            $m = $rezolvaMasina($c);
             foreach ($c->produse as $linie) {
-                $denumire = $linie->produs?->denumire ?? 'Produs necunoscut';
-                $cantitate = (int) $linie->cantitate;
-                if ($cantitate > 0) {
-                    $sumarProduse->push(['denumire' => $denumire, 'cantitate' => $cantitate]);
-                }
+                $adaugaProdus($m['key'], $m['denumire'], $m['culoare'], $linie->produs?->denumire ?? 'Produs necunoscut', (int) $linie->cantitate);
             }
         }
 
-        $sumarProduse = $sumarProduse
-            ->groupBy('denumire')
-            ->map(fn ($grup, $denumire) => [
-                'denumire'  => $denumire,
-                'cantitate' => $grup->sum('cantitate'),
-            ])
-            ->sortByDesc('cantitate')
-            ->values();
+        // Sorteaza produsele in fiecare masina dupa cantitate desc
+        foreach ($produsePerMasina as &$grup) {
+            arsort($grup['produse']);
+            $grup['total'] = array_sum($grup['produse']);
+        }
+        unset($grup);
+
+        // Sorteaza total desc
+        arsort($produseTotale);
 
         $totalComenzi = $clasice->count() + $rapide->count() + $probleme->count();
 
         return view('livewire.gestiune.lista-comenzi', [
-            'masini'        => $masini,
-            'depozite'      => $depozite,
-            'cuObservatii'  => $cuObservatii,
-            'sumarProduse'  => $sumarProduse,
-            'totalComenzi'  => $totalComenzi,
+            'masini'            => $masini,
+            'depozite'          => $depozite,
+            'cuObservatii'      => $cuObservatii,
+            'labelFiltruMasina' => $labelFiltruMasina,
+            'produseTotale'     => $produseTotale,
+            'produsePerMasina'  => array_values($produsePerMasina),
+            'totalComenzi'      => $totalComenzi,
         ]);
     }
 }
