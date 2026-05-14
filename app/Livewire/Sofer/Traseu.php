@@ -143,10 +143,13 @@ class Traseu extends Component
         if (! $c instanceof Comanda) {
             return;
         }
+        $c->loadMissing('produse');
         $this->reseteazaRecipienti();
         $this->idComandaActiva = $c->id;
-        $this->recLasati19l = (int) $c->nr_recipienti;
-        $this->recLasati11l = (int) $c->nr_pahare;
+        // nr_recipienti/nr_pahare sunt coloane directe (pot fi 0); daca sunt 0,
+        // fallback pe cantitatile reale din liniile de comanda (id_produs 45=19L, 46=11L)
+        $this->recLasati19l = (int) $c->nr_recipienti ?: (int) $c->produse->where('id_produs', 45)->sum('cantitate');
+        $this->recLasati11l = (int) $c->nr_pahare    ?: (int) $c->produse->where('id_produs', 46)->sum('cantitate');
         $this->modConfirmareLivrare = $modConfirmareLivrare;
         $this->modalRecipienti = true;
     }

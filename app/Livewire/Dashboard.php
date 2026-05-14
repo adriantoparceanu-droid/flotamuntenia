@@ -77,28 +77,31 @@ class Dashboard extends Component
     }
 
     /**
-     * Total bidoane 19L livrate luna curenta (sum din `comenzi.nr_recipienti`
-     * pentru comenzile livrate). Plus comenzi rapide + probleme — TBD daca
-     * vrem sa includem (momentan doar comenzi).
+     * Total bidoane 19L livrate luna curenta — calculat din comenzi_produse (id_produs=45),
+     * deoarece nr_recipienti pe comenzi nu este populat consistent.
      */
     #[Computed]
     public function bidoane19lLuna(): int
     {
-        return (int) Comanda::whereYear('data_livrare', now()->year)
-            ->whereMonth('data_livrare', now()->month)
-            ->vizibile()
-            ->where('livrat', true)
-            ->sum('nr_recipienti');
+        return (int) \Illuminate\Support\Facades\DB::table('comenzi_produse')
+            ->join('comenzi', 'comenzi.id', '=', 'comenzi_produse.id_comanda')
+            ->whereYear('comenzi.data_livrare', now()->year)
+            ->whereMonth('comenzi.data_livrare', now()->month)
+            ->where('comenzi.livrat', true)
+            ->where('comenzi_produse.id_produs', 45)
+            ->sum('comenzi_produse.cantitate');
     }
 
     #[Computed]
     public function bidoane11lLuna(): int
     {
-        return (int) Comanda::whereYear('data_livrare', now()->year)
-            ->whereMonth('data_livrare', now()->month)
-            ->vizibile()
-            ->where('livrat', true)
-            ->sum('nr_pahare');
+        return (int) \Illuminate\Support\Facades\DB::table('comenzi_produse')
+            ->join('comenzi', 'comenzi.id', '=', 'comenzi_produse.id_comanda')
+            ->whereYear('comenzi.data_livrare', now()->year)
+            ->whereMonth('comenzi.data_livrare', now()->month)
+            ->where('comenzi.livrat', true)
+            ->where('comenzi_produse.id_produs', 46)
+            ->sum('comenzi_produse.cantitate');
     }
 
     #[Computed]

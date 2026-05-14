@@ -11,7 +11,7 @@
         foreach ($itemi as $i) {
             $sumar19l += $i['nr19l'];
             $sumar11l += $i['nr11l'];
-            if ($i['lat'] !== null && $i['lng'] !== null) {
+            if (!$i['livrat'] && $i['lat'] !== null && $i['lng'] !== null) {
                 $estaNeasignata = empty($i['id_masina']);
                 $puncteHarta[] = [
                     'tip' => $i['tip'],
@@ -546,7 +546,7 @@
                 const buildIcon = (culoare, livrat) => ({
                     path: 'M12 2C7.58 2 4 5.58 4 10c0 5.5 8 12 8 12s8-6.5 8-12c0-4.42-3.58-8-8-8z',
                     fillColor: culoare,
-                    fillOpacity: livrat ? 0.5 : 1,
+                    fillOpacity: livrat ? 0.2 : 1,
                     strokeColor: '#fff',
                     strokeWeight: 2,
                     scale: 1.6,
@@ -603,6 +603,7 @@
                             center: { lat: puncte[0].lat, lng: puncte[0].lng },
                             mapTypeControl: false,
                             streetViewControl: false,
+                            gestureHandling: 'greedy',
                             styles: STIL_HARTA_FADE,
                         });
                     } else {
