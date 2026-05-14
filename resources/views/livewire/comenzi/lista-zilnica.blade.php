@@ -459,14 +459,25 @@
     @script
         <script>
             (() => {
-                // InfoWindow activ — un singur popup deschis simultan pe harta.
-                // La click pe alt pin inchidem popup-ul precedent inainte sa il
-                // deschidem pe cel nou. Persistat la nivel IIFE.
-                let infoActiv = null;
+                // OPTIMIZARE: in loc sa distrugem si recreem toti markerii la fiecare
+                // update Livewire, facem diff pe cheie "tip-id":
+                //   - marker existent + schimbare vizuala → setIcon() / setLabel() (fara DOM nou)
+                //   - marker nou → new Marker() o singura data
+                //   - marker disparut (zi schimbata, filtru) → setMap(null)
+                // Un singur InfoWindow reutilizat (nu N instante, cate una per pin).
+                // fitBounds() se apeleaza o singura data la initializare sau cand setul
+                // de coordonate GPS se schimba (zi noua, filtru masina/depozit schimbat).
 
-                // Stil "fade" — desaturat / pal, ca pinii colorati (per masina) sa iasa
-                // puternic in contrast pe harta. Pastrat sincronizat cu cel din
-                // sofer/traseu.blade.php (modifica ambele la unison cand ajustezi paleta).
+                // Map<"tip-id", { marker, culoare, livrat, idMasina, ordine }> — starea curenta a pinilor
+                if (!window.__hartaMarkeriMap) window.__hartaMarkeriMap = new Map();
+
+                // Un singur InfoWindow partajat intre toti markerii
+                if (!window.__hartaInfoWindow) window.__hartaInfoWindow = null;
+
+                // Amprenta setului de coordonate GPS — pentru a detecta schimbari majore (zi/filtru)
+                if (!window.__hartaAmprentaGps) window.__hartaAmprentaGps = '';
+
+                // Stil "fade" — sincronizat cu sofer/traseu.blade.php
                 const STIL_HARTA_FADE = [
                     { elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] },
                     { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
@@ -487,35 +498,62 @@
                     { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#93c5fd' }] },
                 ];
 
-                // Citeste punctele proaspete din data-carrier-ul morfat de Livewire la fiecare update.
                 const citestePuncte = () => {
                     const el = document.getElementById('harta-data');
                     if (!el) return [];
-                    try {
-                        return JSON.parse(el.dataset.puncte || '[]');
-                    } catch (e) {
-                        return [];
-                    }
+                    try { return JSON.parse(el.dataset.puncte || '[]'); } catch { return []; }
                 };
 
-                // Lista de masini pentru dropdown-ul din popup-ul pinului.
                 const citesteMasini = () => {
                     const el = document.getElementById('harta-data');
                     if (!el) return [];
-                    try {
-                        return JSON.parse(el.dataset.masini || '[]');
-                    } catch (e) {
-                        return [];
-                    }
+                    try { return JSON.parse(el.dataset.masini || '[]'); } catch { return []; }
                 };
 
-                // Escape simplu pentru a injecta in atribute si in textul optiunilor.
                 const escHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
                     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
                 }[c]));
 
-                // Handler global apelat din onchange-ul select-ului din InfoWindow.
-                // Dispatch global Livewire — componenta ListaZilnica asculta cu #[On('aloca-masina-harta')].
+                // Construieste HTML-ul popup-ului — apelat la click (nu la creare marker).
+                const buildInfoHtml = (p, masini) => {
+                    const cantitati = [];
+                    if (p.nr19l) cantitati.push(`${p.nr19l}× 19L`);
+                    if (p.nr11l) cantitati.push(`${p.nr11l}× 11L`);
+                    const tipBadge = p.tip === 'comanda_rapida' ? '⚡ ' : '';
+                    const idCurent = (p.id_masina === null || p.id_masina === undefined) ? '' : String(p.id_masina);
+                    const optiuni = ['<option value=""' + (idCurent === '' ? ' selected' : '') + '>— Nealocata —</option>']
+                        .concat(masini.map(m => {
+                            const sel = idCurent === String(m.id) ? ' selected' : '';
+                            return `<option value="${m.id}"${sel}>${escHtml(m.denumire)}</option>`;
+                        })).join('');
+                    const metaParti = [escHtml(p.masina)];
+                    if (p.ordine > 0) metaParti.push('#' + p.ordine);
+                    if (cantitati.length) metaParti.push(cantitati.join(' · '));
+                    return `<div style="font-size:12px;line-height:1.35;min-width:220px">
+                        <div style="font-weight:600;color:#111">${tipBadge}${escHtml(p.titlu)}</div>
+                        <div style="color:#666;margin-top:1px">${escHtml(p.subtitlu)}</div>
+                        <div style="color:#888;margin-top:1px;font-size:11px">${metaParti.join(' · ')}</div>
+                        <div style="margin-top:6px;display:flex;align-items:center;gap:6px">
+                            <span style="color:#666;font-size:11px">Alocă:</span>
+                            <select onchange="window.__alocaDinHarta('${p.tip}',${p.id},this.value)"
+                                    style="font-size:12px;padding:2px 4px;border:1px solid #d1d5db;border-radius:4px;flex:1">
+                                ${optiuni}
+                            </select>
+                        </div>
+                    </div>`;
+                };
+
+                const buildIcon = (culoare, livrat) => ({
+                    path: 'M12 2C7.58 2 4 5.58 4 10c0 5.5 8 12 8 12s8-6.5 8-12c0-4.42-3.58-8-8-8z',
+                    fillColor: culoare,
+                    fillOpacity: livrat ? 0.5 : 1,
+                    strokeColor: '#fff',
+                    strokeWeight: 2,
+                    scale: 1.6,
+                    anchor: new google.maps.Point(12, 22),
+                    labelOrigin: new google.maps.Point(12, 10),
+                });
+
                 window.__alocaDinHarta = (tip, id, valoare) => {
                     if (typeof Livewire === 'undefined') return;
                     Livewire.dispatch('aloca-masina-harta', { tip, id, valoare });
@@ -525,36 +563,31 @@
                     const div = document.getElementById('harta-traseu');
                     if (!div || !window.google || !window.google.maps) return;
 
-                    const puncte = citestePuncte();
-
-                    // Daca avem harta cached dar div-ul ei nu mai e in DOM-ul curent
-                    // (ex. dupa wire:navigate cand DOM-ul e inlocuit complet), invalidam cache-ul.
+                    // Detectam invalidare harta (wire:navigate inlocuieste DOM-ul complet)
                     if (window.__harta) {
                         const divCached = window.__harta.getDiv();
                         if (divCached !== div || !document.body.contains(divCached)) {
-                            // Curatam markerii vechi atasati la harta orfana.
-                            if (window.__hartaMarkeri) {
-                                window.__hartaMarkeri.forEach(m => m.setMap(null));
-                            }
-                            window.__hartaMarkeri = [];
+                            window.__hartaMarkeriMap.forEach(e => e.marker.setMap(null));
+                            window.__hartaMarkeriMap.clear();
+                            if (window.__hartaInfoWindow) { window.__hartaInfoWindow.close(); window.__hartaInfoWindow = null; }
+                            window.__hartaAmprentaGps = '';
                             window.__harta = null;
                         }
                     }
 
-                    // Curatam markerii existenti la fiecare re-render.
-                    if (window.__hartaMarkeri) {
-                        window.__hartaMarkeri.forEach(m => m.setMap(null));
-                    }
-                    window.__hartaMarkeri = [];
-                    // Inchidem si popup-ul activ — apartinea unui marker care poate
-                    // nu mai exista dupa re-render.
-                    if (infoActiv) {
-                        infoActiv.close();
-                        infoActiv = null;
-                    }
+                    const puncte = citestePuncte();
+                    const masini = citesteMasini();
+
+                    // Amprenta GPS: string sortat de "lat,lng" — se schimba cand zi/filtru se schimba
+                    const amprentaNouaGps = puncte.map(p => `${p.lat},${p.lng}`).sort().join('|');
+                    const schimbaCoordonate = amprentaNouaGps !== window.__hartaAmprentaGps;
+                    window.__hartaAmprentaGps = amprentaNouaGps;
 
                     if (puncte.length === 0) {
-                        // Pastram instanta hartii daca exista — nu o distrugem.
+                        // Ascundem toti markerii existenti fara sa-i distrugem
+                        window.__hartaMarkeriMap.forEach(e => e.marker.setMap(null));
+                        window.__hartaMarkeriMap.clear();
+                        if (window.__hartaInfoWindow) { window.__hartaInfoWindow.close(); }
                         return;
                     }
 
@@ -567,102 +600,104 @@
                             styles: STIL_HARTA_FADE,
                         });
                     } else {
-                        // Recalibram daca dimensiunile s-au schimbat (ex. div era ascuns).
                         google.maps.event.trigger(window.__harta, 'resize');
                     }
 
                     const harta = window.__harta;
-                    const bounds = new google.maps.LatLngBounds();
-                    const masini = citesteMasini();
 
-                    puncte.forEach((p) => {
-                        const pos = { lat: p.lat, lng: p.lng };
-                        bounds.extend(pos);
-
-                        const ordineText = p.ordine > 0 ? String(p.ordine) : '';
-                        const marker = new google.maps.Marker({
-                            position: pos,
-                            map: harta,
-                            title: `${p.titlu} — ${p.subtitlu}`,
-                            label: { text: ordineText || ' ', color: '#fff', fontSize: '11px', fontWeight: 'bold' },
-                            icon: {
-                                path: 'M12 2C7.58 2 4 5.58 4 10c0 5.5 8 12 8 12s8-6.5 8-12c0-4.42-3.58-8-8-8z',
-                                fillColor: p.culoare,
-                                fillOpacity: p.livrat ? 0.5 : 1,
-                                strokeColor: '#fff',
-                                strokeWeight: 2,
-                                scale: 1.6,
-                                anchor: new google.maps.Point(12, 22),
-                                labelOrigin: new google.maps.Point(12, 10),
-                            },
+                    // Un singur InfoWindow reutilizat
+                    if (!window.__hartaInfoWindow) {
+                        window.__hartaInfoWindow = new google.maps.InfoWindow();
+                        window.__hartaInfoWindow.addListener('closeclick', () => {
+                            window.__hartaInfoWindowPin = null;
                         });
+                    }
+                    const infoWindow = window.__hartaInfoWindow;
 
-                        const cantitati = [];
-                        if (p.nr19l) cantitati.push(`${p.nr19l}× 19L`);
-                        if (p.nr11l) cantitati.push(`${p.nr11l}× 11L`);
-                        const tipBadge = p.tip === 'comanda_rapida' ? '⚡ ' : '';
+                    // ── DIFF: cheile din noul set de puncte ─────────────────────────────
+                    const keysNoi = new Set(puncte.map(p => `${p.tip}-${p.id}`));
 
-                        // Dropdown alocare in popup. Selectarea face Livewire.dispatch -> server update -> re-render harta.
-                        const idCurent = (p.id_masina === null || p.id_masina === undefined) ? '' : String(p.id_masina);
-                        const optiuni = ['<option value=""' + (idCurent === '' ? ' selected' : '') + '>— Nealocata —</option>']
-                            .concat(masini.map(m => {
-                                const sel = idCurent === String(m.id) ? ' selected' : '';
-                                return `<option value="${m.id}"${sel}>${escHtml(m.denumire)}</option>`;
-                            }))
-                            .join('');
-
-                        // Linie metadata: masina + #ordine + cantitati intr-un singur rand pentru compactare.
-                        const metaParti = [escHtml(p.masina)];
-                        if (p.ordine > 0) metaParti.push('#' + p.ordine);
-                        if (cantitati.length) metaParti.push(cantitati.join(' · '));
-                        const metaLinie = metaParti.join(' · ');
-
-                        const html = `<div style="font-size:12px;line-height:1.35;min-width:220px">
-                            <div style="font-weight:600;color:#111">${tipBadge}${escHtml(p.titlu)}</div>
-                            <div style="color:#666;margin-top:1px">${escHtml(p.subtitlu)}</div>
-                            <div style="color:#888;margin-top:1px;font-size:11px">${metaLinie}</div>
-                            <div style="margin-top:6px;display:flex;align-items:center;gap:6px">
-                                <span style="color:#666;font-size:11px">Alocă:</span>
-                                <select onchange="window.__alocaDinHarta('${p.tip}', ${p.id}, this.value)"
-                                        style="font-size:12px;padding:2px 4px;border:1px solid #d1d5db;border-radius:4px;flex:1">
-                                    ${optiuni}
-                                </select>
-                            </div>
-                        </div>`;
-                        const info = new google.maps.InfoWindow({ content: html });
-                        marker.addListener('click', () => {
-                            if (infoActiv && infoActiv !== info) {
-                                infoActiv.close();
-                            }
-                            info.open(harta, marker);
-                            infoActiv = info;
-                        });
-                        info.addListener('closeclick', () => {
-                            if (infoActiv === info) infoActiv = null;
-                        });
-
-                        window.__hartaMarkeri.push(marker);
+                    // Sterge markeri care au disparut (zi schimbata, filtru)
+                    window.__hartaMarkeriMap.forEach((entry, key) => {
+                        if (!keysNoi.has(key)) {
+                            entry.marker.setMap(null);
+                            window.__hartaMarkeriMap.delete(key);
+                        }
                     });
 
-                    if (puncte.length > 1) harta.fitBounds(bounds);
+                    const bounds = schimbaCoordonate ? new google.maps.LatLngBounds() : null;
+
+                    puncte.forEach((p) => {
+                        const key = `${p.tip}-${p.id}`;
+                        const pos = { lat: p.lat, lng: p.lng };
+                        if (bounds) bounds.extend(pos);
+
+                        if (window.__hartaMarkeriMap.has(key)) {
+                            // ── Marker existent: actualizeaza numai ce s-a schimbat ────
+                            const entry = window.__hartaMarkeriMap.get(key);
+                            const culoareSchimbata = entry.culoare !== p.culoare;
+                            const livratSchimbat   = entry.livrat  !== p.livrat;
+                            const ordineSchimbat   = entry.ordine  !== p.ordine;
+
+                            if (culoareSchimbata || livratSchimbat) {
+                                entry.marker.setIcon(buildIcon(p.culoare, p.livrat));
+                                entry.culoare = p.culoare;
+                                entry.livrat  = p.livrat;
+                            }
+                            if (ordineSchimbat) {
+                                const ordineText = p.ordine > 0 ? String(p.ordine) : ' ';
+                                entry.marker.setLabel({ text: ordineText, color: '#fff', fontSize: '11px', fontWeight: 'bold' });
+                                entry.ordine = p.ordine;
+                            }
+                            // Actualizam id_masina in entry (pentru popup la click)
+                            entry.idMasina = p.id_masina;
+                            entry.p = p; // referinta proaspata pentru popup
+                        } else {
+                            // ── Marker nou: creat o singura data ──────────────────────
+                            const ordineText = p.ordine > 0 ? String(p.ordine) : ' ';
+                            const marker = new google.maps.Marker({
+                                position: pos,
+                                map: harta,
+                                title: `${p.titlu} — ${p.subtitlu}`,
+                                label: { text: ordineText, color: '#fff', fontSize: '11px', fontWeight: 'bold' },
+                                icon: buildIcon(p.culoare, p.livrat),
+                            });
+
+                            marker.addListener('click', () => {
+                                // Construim HTML-ul popup-ului la click (nu la creare)
+                                // folosind datele proaspete din entry.p
+                                const entry = window.__hartaMarkeriMap.get(key);
+                                if (!entry) return;
+                                infoWindow.setContent(buildInfoHtml(entry.p, masini));
+                                infoWindow.open(harta, marker);
+                                window.__hartaInfoWindowPin = key;
+                            });
+
+                            window.__hartaMarkeriMap.set(key, {
+                                marker,
+                                culoare: p.culoare,
+                                livrat: p.livrat,
+                                ordine: p.ordine,
+                                idMasina: p.id_masina,
+                                p, // referinta proaspata pentru popup
+                            });
+                        }
+                    });
+
+                    // fitBounds doar cand setul de coordonate s-a schimbat
+                    if (bounds && puncte.length > 1) harta.fitBounds(bounds);
                 };
 
-                // Expunem global pentru callback-ul Google Maps si pentru hook-ul Livewire.
                 window.__renderListaZilnica = renderHarta;
                 window.initListaZilnicaMap = renderHarta;
 
-                // Render initial daca API-ul Google e deja incarcat.
                 if (window.google && window.google.maps) {
                     renderHarta();
                 }
 
-                // Hook pentru re-randare la fiecare update Livewire.
-                // Garda: nu inregistram hook-ul de mai multe ori daca scriptul ruleaza din nou
-                // (la wire:navigate scriptul se re-evalueaza, dar hook-ul global persista).
                 if (!window.__listaZilnicaHookRegistrat && typeof Livewire !== 'undefined') {
                     window.__listaZilnicaHookRegistrat = true;
                     Livewire.hook('morph.updated', () => {
-                        // Defer la urmatorul tick pentru DOM stabilizat.
                         setTimeout(() => {
                             if (typeof window.__renderListaZilnica === 'function') {
                                 window.__renderListaZilnica();

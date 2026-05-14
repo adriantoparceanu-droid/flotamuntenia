@@ -446,14 +446,17 @@
     @script
         <script>
             (() => {
-                // InfoWindow activ — un singur popup deschis simultan pe harta.
-                // La click pe alt pin inchidem popup-ul precedent inainte sa il
-                // deschidem pe cel nou. Persistat la nivel IIFE (nu re-creat la
-                // fiecare renderHarta), ca sa supravietuiasca re-randarii Livewire.
-                let infoActiv = null;
+                // OPTIMIZARE: diff inteligent pe cheie "tip-id" — identic cu lista-zilnica.
+                // Caz specific sofer: cand o comanda e marcata livrata, pin-ul dispare
+                // din $puncteHarta (serverul trimite doar ne-livrate). Cheia lipseste
+                // din keysNoi → setMap(null) → animatie disparitie fara recreare totala.
+                // Un singur InfoWindow reutilizat. fitBounds doar la schimbare set GPS.
 
-                // Stil "fade" — desaturat / pal, ca pinii colorati sa iasa puternic in contrast.
-                // Pastrat sincronizat cu cel din lista-zilnica.blade.php.
+                if (!window.__hartaSoferMarkeriMap) window.__hartaSoferMarkeriMap = new Map();
+                if (!window.__hartaSoferInfoWindow) window.__hartaSoferInfoWindow = null;
+                if (!window.__hartaSoferAmprentaGps) window.__hartaSoferAmprentaGps = '';
+
+                // Stil "fade" — sincronizat cu lista-zilnica.blade.php
                 const STIL_HARTA_FADE = [
                     { elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] },
                     { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
@@ -477,18 +480,44 @@
                 const citestePuncte = () => {
                     const el = document.getElementById('harta-sofer-data');
                     if (!el) return [];
-                    try {
-                        return JSON.parse(el.dataset.puncte || '[]');
-                    } catch (e) {
-                        return [];
-                    }
+                    try { return JSON.parse(el.dataset.puncte || '[]'); } catch { return []; }
                 };
 
                 const escHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
                     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
                 }[c]));
 
-                // Scroll + expand item-ul corespunzator pinului din lista
+                // Construieste HTML-ul popup-ului la click, nu la creare marker
+                const buildInfoHtml = (p) => {
+                    const cantitati = [];
+                    if (p.nr19l) cantitati.push(`${p.nr19l}× 19L`);
+                    if (p.nr11l) cantitati.push(`${p.nr11l}× 11L`);
+                    const tipBadge = p.rapida ? '⚡ ' : '';
+                    return `<div style="font-size:12px;line-height:1.35;min-width:200px">
+                        <div style="font-weight:600;color:#111">${tipBadge}${escHtml(p.titlu)}</div>
+                        <div style="color:#666;margin-top:1px">${escHtml(p.subtitlu)}</div>
+                        ${p.ordine > 0 ? `<div style="color:#888;margin-top:1px;font-size:11px">Stop #${p.ordine}</div>` : ''}
+                        ${cantitati.length ? `<div style="color:#444;margin-top:4px;font-size:11px">${cantitati.join(' · ')}</div>` : ''}
+                        <div style="margin-top:6px">
+                            <button onclick="window.__focusItemSofer('${escHtml(p.cheie)}')"
+                                    style="font-size:11px;padding:3px 8px;border:1px solid #4f46e5;background:#eef2ff;color:#4f46e5;border-radius:4px;cursor:pointer">
+                                Vezi in lista
+                            </button>
+                        </div>
+                    </div>`;
+                };
+
+                const buildIcon = (culoare) => ({
+                    path: 'M12 2C7.58 2 4 5.58 4 10c0 5.5 8 12 8 12s8-6.5 8-12c0-4.42-3.58-8-8-8z',
+                    fillColor: culoare,
+                    fillOpacity: 1,
+                    strokeColor: '#fff',
+                    strokeWeight: 2,
+                    scale: 1.6,
+                    anchor: new google.maps.Point(12, 22),
+                    labelOrigin: new google.maps.Point(12, 10),
+                });
+
                 window.__focusItemSofer = (cheie) => {
                     const el = document.getElementById('item-' + cheie);
                     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -498,34 +527,30 @@
                     const div = document.getElementById('harta-traseu-sofer');
                     if (!div || !window.google || !window.google.maps) return;
 
-                    const puncte = citestePuncte();
-
-                    // Invalidare cache cand div-ul a fost recreat (wire:navigate)
+                    // Invalidare cache la wire:navigate (DOM inlocuit complet)
                     if (window.__hartaSofer) {
                         const divCached = window.__hartaSofer.getDiv();
                         if (divCached !== div || !document.body.contains(divCached)) {
-                            if (window.__hartaSoferMarkeri) {
-                                window.__hartaSoferMarkeri.forEach(m => m.setMap(null));
-                            }
-                            window.__hartaSoferMarkeri = [];
+                            window.__hartaSoferMarkeriMap.forEach(e => e.marker.setMap(null));
+                            window.__hartaSoferMarkeriMap.clear();
+                            if (window.__hartaSoferInfoWindow) { window.__hartaSoferInfoWindow.close(); window.__hartaSoferInfoWindow = null; }
+                            window.__hartaSoferAmprentaGps = '';
                             window.__hartaSofer = null;
                         }
                     }
 
-                    // Curatam markerii la fiecare re-render (pinii livraților dispar)
-                    if (window.__hartaSoferMarkeri) {
-                        window.__hartaSoferMarkeri.forEach(m => m.setMap(null));
-                    }
-                    window.__hartaSoferMarkeri = [];
-                    // Inchidem si popup-ul activ — apartinea unui marker care poate
-                    // a fost sters (ex: comanda a fost marcata livrata in alt tab).
-                    if (infoActiv) {
-                        infoActiv.close();
-                        infoActiv = null;
-                    }
+                    const puncte = citestePuncte();
+
+                    // Amprenta GPS: detecteaza schimbare zi sau disparitia unui pin (marcat livrat)
+                    const amprentaNouaGps = puncte.map(p => `${p.lat},${p.lng}`).sort().join('|');
+                    const schimbaCoordonate = amprentaNouaGps !== window.__hartaSoferAmprentaGps;
+                    window.__hartaSoferAmprentaGps = amprentaNouaGps;
 
                     if (puncte.length === 0) {
-                        return; // overlay HTML afiseaza mesajul corespunzator
+                        window.__hartaSoferMarkeriMap.forEach(e => e.marker.setMap(null));
+                        window.__hartaSoferMarkeriMap.clear();
+                        if (window.__hartaSoferInfoWindow) window.__hartaSoferInfoWindow.close();
+                        return;
                     }
 
                     if (!window.__hartaSofer) {
@@ -542,69 +567,87 @@
                     }
 
                     const harta = window.__hartaSofer;
-                    const bounds = new google.maps.LatLngBounds();
 
-                    puncte.forEach((p) => {
-                        const pos = { lat: p.lat, lng: p.lng };
-                        bounds.extend(pos);
-
-                        const ordineText = p.ordine > 0 ? String(p.ordine) : '';
-                        const marker = new google.maps.Marker({
-                            position: pos,
-                            map: harta,
-                            title: `${p.titlu} — ${p.subtitlu}`,
-                            label: { text: ordineText || ' ', color: '#fff', fontSize: '11px', fontWeight: 'bold' },
-                            icon: {
-                                path: 'M12 2C7.58 2 4 5.58 4 10c0 5.5 8 12 8 12s8-6.5 8-12c0-4.42-3.58-8-8-8z',
-                                fillColor: p.culoare,
-                                fillOpacity: 1,
-                                strokeColor: '#fff',
-                                strokeWeight: 2,
-                                scale: 1.6,
-                                anchor: new google.maps.Point(12, 22),
-                                labelOrigin: new google.maps.Point(12, 10),
-                            },
+                    // Un singur InfoWindow partajat
+                    if (!window.__hartaSoferInfoWindow) {
+                        window.__hartaSoferInfoWindow = new google.maps.InfoWindow();
+                        window.__hartaSoferInfoWindow.addListener('closeclick', () => {
+                            window.__hartaSoferInfoWindowPin = null;
                         });
+                    }
+                    const infoWindow = window.__hartaSoferInfoWindow;
 
-                        const cantitati = [];
-                        if (p.nr19l) cantitati.push(`${p.nr19l}× 19L`);
-                        if (p.nr11l) cantitati.push(`${p.nr11l}× 11L`);
-                        const tipBadge = p.rapida ? '⚡ ' : '';
+                    // ── DIFF ───────────────────────────────────────────────────────────────
+                    const keysNoi = new Set(puncte.map(p => p.cheie));
 
-                        const html = `<div style="font-size:12px;line-height:1.35;min-width:200px">
-                            <div style="font-weight:600;color:#111">${tipBadge}${escHtml(p.titlu)}</div>
-                            <div style="color:#666;margin-top:1px">${escHtml(p.subtitlu)}</div>
-                            ${p.ordine > 0 ? `<div style="color:#888;margin-top:1px;font-size:11px">Stop #${p.ordine}</div>` : ''}
-                            ${cantitati.length ? `<div style="color:#444;margin-top:4px;font-size:11px">${cantitati.join(' · ')}</div>` : ''}
-                            <div style="margin-top:6px">
-                                <button onclick="window.__focusItemSofer('${escHtml(p.cheie)}')"
-                                        style="font-size:11px;padding:3px 8px;border:1px solid #4f46e5;background:#eef2ff;color:#4f46e5;border-radius:4px;cursor:pointer">
-                                    Vezi in lista
-                                </button>
-                            </div>
-                        </div>`;
-                        const info = new google.maps.InfoWindow({ content: html });
-                        marker.addListener('click', () => {
-                            if (infoActiv && infoActiv !== info) {
-                                infoActiv.close();
+                    // Elimina markerii disparuti (comenzi marcate livrate → nu mai sunt in puncte)
+                    window.__hartaSoferMarkeriMap.forEach((entry, key) => {
+                        if (!keysNoi.has(key)) {
+                            entry.marker.setMap(null);
+                            window.__hartaSoferMarkeriMap.delete(key);
+                            if (window.__hartaSoferInfoWindowPin === key) {
+                                infoWindow.close();
+                                window.__hartaSoferInfoWindowPin = null;
                             }
-                            info.open(harta, marker);
-                            infoActiv = info;
-                        });
-                        // Daca user-ul inchide popup-ul prin butonul X, scoatem
-                        // referinta ca sa nu apelam .close() pe un popup deja inchis.
-                        info.addListener('closeclick', () => {
-                            if (infoActiv === info) infoActiv = null;
-                        });
-
-                        window.__hartaSoferMarkeri.push(marker);
+                        }
                     });
 
-                    if (puncte.length > 1) {
-                        harta.fitBounds(bounds);
-                    } else {
-                        harta.setCenter({ lat: puncte[0].lat, lng: puncte[0].lng });
-                        harta.setZoom(14);
+                    const bounds = schimbaCoordonate ? new google.maps.LatLngBounds() : null;
+
+                    puncte.forEach((p) => {
+                        const key = p.cheie;
+                        const pos = { lat: p.lat, lng: p.lng };
+                        if (bounds) bounds.extend(pos);
+
+                        if (window.__hartaSoferMarkeriMap.has(key)) {
+                            // Marker existent: actualizeaza doar daca culoarea s-a schimbat
+                            const entry = window.__hartaSoferMarkeriMap.get(key);
+                            if (entry.culoare !== p.culoare) {
+                                entry.marker.setIcon(buildIcon(p.culoare));
+                                entry.culoare = p.culoare;
+                            }
+                            if (entry.ordine !== p.ordine) {
+                                const ordineText = p.ordine > 0 ? String(p.ordine) : ' ';
+                                entry.marker.setLabel({ text: ordineText, color: '#fff', fontSize: '11px', fontWeight: 'bold' });
+                                entry.ordine = p.ordine;
+                            }
+                            entry.p = p; // mentine referinta proaspata pentru popup
+                        } else {
+                            // Marker nou
+                            const ordineText = p.ordine > 0 ? String(p.ordine) : ' ';
+                            const marker = new google.maps.Marker({
+                                position: pos,
+                                map: harta,
+                                title: `${p.titlu} — ${p.subtitlu}`,
+                                label: { text: ordineText, color: '#fff', fontSize: '11px', fontWeight: 'bold' },
+                                icon: buildIcon(p.culoare),
+                            });
+
+                            marker.addListener('click', () => {
+                                const entry = window.__hartaSoferMarkeriMap.get(key);
+                                if (!entry) return;
+                                infoWindow.setContent(buildInfoHtml(entry.p));
+                                infoWindow.open(harta, marker);
+                                window.__hartaSoferInfoWindowPin = key;
+                            });
+
+                            window.__hartaSoferMarkeriMap.set(key, {
+                                marker,
+                                culoare: p.culoare,
+                                ordine: p.ordine,
+                                p,
+                            });
+                        }
+                    });
+
+                    // fitBounds doar cand setul de coordonate s-a schimbat (zi noua sau pin disparut)
+                    if (bounds) {
+                        if (puncte.length > 1) {
+                            harta.fitBounds(bounds);
+                        } else {
+                            harta.setCenter({ lat: puncte[0].lat, lng: puncte[0].lng });
+                            harta.setZoom(14);
+                        }
                     }
                 };
 
@@ -614,7 +657,6 @@
                     renderHarta();
                 }
 
-                // Re-render la fiecare update Livewire (livrat -> dispare pin)
                 if (!window.__traseuSoferHookRegistrat && typeof Livewire !== 'undefined') {
                     window.__traseuSoferHookRegistrat = true;
                     Livewire.hook('morph.updated', () => {
