@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\SetariPlatforma;
+use App\Services\ModuleService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Artisan;
@@ -33,6 +34,7 @@ class CronController extends Controller
     public function igienizariZilnice(Request $request, string $token): Response
     {
         $this->validateazaToken($token, 'igienizari-zilnice', $request);
+        $this->verificaModulCron($request);
 
         $exitCode = Artisan::call('igienizari:zilnice');
         $output = Artisan::output();
@@ -52,6 +54,7 @@ class CronController extends Controller
     public function mentenantaVerifica(Request $request, string $token): Response
     {
         $this->validateazaToken($token, 'mentenanta-verifica', $request);
+        $this->verificaModulCron($request);
 
         $exitCode = Artisan::call('mentenanta:verifica');
         $output = Artisan::output();
@@ -63,6 +66,18 @@ class CronController extends Controller
 
         return response("OK\n\n" . $output, 200)
             ->header('Content-Type', 'text/plain; charset=utf-8');
+    }
+
+    /**
+     * Verifică că modulul Cron e activ. Returnează 403 dacă e dezactivat.
+     * Throttle-ul din rute rămâne activ indiferent de starea modulului.
+     */
+    private function verificaModulCron(Request $request): void
+    {
+        if (! ModuleService::isActive(SetariPlatforma::MODUL_CRON)) {
+            Log::channel('cron')->info('[cron] modul dezactivat — request respins', ['ip' => $request->ip()]);
+            abort(403, 'Modulul Cron este dezactivat.');
+        }
     }
 
     /**

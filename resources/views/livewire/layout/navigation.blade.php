@@ -39,14 +39,14 @@ new class extends Component
         </div>
 
         {{-- Navigatie pe rol.
-             Pentru admin: secțiunile Operational/Dozatoare/Financiar/Setari sunt collapsibile.
+             Pentru admin/superadmin: secțiunile Operational/Dozatoare/Financiar/Setari/Platforma sunt collapsibile.
              State persistat in localStorage per user (cheie: sidebar-expanded-{userId}).
              La fresh login (no key), default: doar Operational expandat. --}}
         <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto"
              @if(auth()->user()->isAdmin())
                 x-data="sidebarSectiuni({
                     userId: {{ auth()->id() }},
-                    implicit: { operational: true, dozatoare: false, financiar: false, setari: false }
+                    implicit: { operational: true, dozatoare: false, financiar: false, setari: false, platforma: false }
                 })"
                 x-init="init()"
              @endif>
@@ -76,15 +76,21 @@ new class extends Component
                      class="space-y-1">
                     <x-sidebar-link icon="users" :href="route('clienti.index')" :active="request()->routeIs('clienti.*')">Clienti</x-sidebar-link>
                     <x-sidebar-link icon="clipboard-document-list" :href="route('comenzi.index')" :active="request()->routeIs('comenzi.*') && ! request()->routeIs('comenzi.aprobare')">Comenzi</x-sidebar-link>
-                    <x-sidebar-link icon="check-badge" :href="route('comenzi.aprobare')" :active="request()->routeIs('comenzi.aprobare')">
-                        <span>Aprobare comenzi</span>
-                        @if($nrAprobariPending > 0)
-                            <span class="inline-flex items-center justify-center px-1.5 min-w-[1.25rem] h-5 text-[11px] rounded-full bg-amber-500 text-white font-semibold">{{ $nrAprobariPending }}</span>
-                        @endif
-                    </x-sidebar-link>
+                    @moduleActiv('portal_client')
+                        <x-sidebar-link icon="check-badge" :href="route('comenzi.aprobare')" :active="request()->routeIs('comenzi.aprobare')">
+                            <span>Aprobare comenzi</span>
+                            @if($nrAprobariPending > 0)
+                                <span class="inline-flex items-center justify-center px-1.5 min-w-[1.25rem] h-5 text-[11px] rounded-full bg-amber-500 text-white font-semibold">{{ $nrAprobariPending }}</span>
+                            @endif
+                        </x-sidebar-link>
+                    @endmoduleActiv
                     <x-sidebar-link icon="calendar-days" :href="route('lista-zilnica')" :active="request()->routeIs('lista-zilnica')">Lista zilnica</x-sidebar-link>
-                    <x-sidebar-link icon="bolt" :href="route('comenzi-rapide.index')" :active="request()->routeIs('comenzi-rapide.*')">Comenzi rapide</x-sidebar-link>
-                    <x-sidebar-link icon="exclamation-triangle" :href="route('probleme.index')" :active="request()->routeIs('probleme.*')">Probleme</x-sidebar-link>
+                    @moduleActiv('comenzi_rapide')
+                        <x-sidebar-link icon="bolt" :href="route('comenzi-rapide.index')" :active="request()->routeIs('comenzi-rapide.*')">Comenzi rapide</x-sidebar-link>
+                    @endmoduleActiv
+                    @moduleActiv('probleme')
+                        <x-sidebar-link icon="exclamation-triangle" :href="route('probleme.index')" :active="request()->routeIs('probleme.*')">Probleme</x-sidebar-link>
+                    @endmoduleActiv
                 </div>
 
                 {{-- ===== DOZATOARE ===== --}}
@@ -98,49 +104,67 @@ new class extends Component
                         ->where('data_urmatoare_mentenanta', '<=', now()->addDays(30)->toDateString())
                         ->count();
                     $nrTotalScadente = $nrDozatoareScadente + $nrFiltreScadente;
+                    $areItemeDozatoare = \App\Services\ModuleService::isActive(\App\Models\SetariPlatforma::MODUL_DOZATOARE)
+                        || \App\Services\ModuleService::isActive(\App\Models\SetariPlatforma::MODUL_RECIPIENTI);
                 @endphp
-                <button type="button" @click="toggle('dozatoare')"
-                        class="mt-4 w-full flex items-center justify-between px-3 py-1.5 text-xs uppercase tracking-wider text-gray-500 hover:text-gray-300 transition">
-                    <span class="flex items-center gap-1.5">
-                        Dozatoare
-                        @if($nrTotalScadente > 0)
-                            <span class="inline-flex items-center justify-center px-1.5 min-w-[1.25rem] h-4 text-[10px] rounded-full bg-amber-500 text-white font-semibold"
-                                  title="Bidoane scadente: {{ $nrDozatoareScadente }} / Filtre scadente: {{ $nrFiltreScadente }}">{{ $nrTotalScadente }}</span>
-                        @endif
-                    </span>
-                    <x-heroicon-m-chevron-down class="w-4 h-4 transition-transform"
-                        x-bind:class="expanded.dozatoare ? '' : '-rotate-90'" />
-                </button>
-                <div x-show="expanded.dozatoare" x-cloak
-                     x-transition:enter="transition ease-out duration-150"
-                     x-transition:enter-start="opacity-0"
-                     x-transition:enter-end="opacity-100"
-                     class="space-y-1">
-                    <x-sidebar-link icon="wrench-screwdriver" :href="route('dozatoare.index')" :active="request()->routeIs('dozatoare.*')">
-                        <span>Mentenanta dozatoare</span>
-                        @if($nrTotalScadente > 0)
-                            <span class="inline-flex items-center justify-center px-1.5 min-w-[1.25rem] h-5 text-[11px] rounded-full bg-amber-500 text-white font-semibold"
-                                  title="Bidoane scadente: {{ $nrDozatoareScadente }} / Filtre scadente: {{ $nrFiltreScadente }}">{{ $nrTotalScadente }}</span>
-                        @endif
-                    </x-sidebar-link>
-                    <x-sidebar-link icon="archive-box" href="#" :active="false">Recipienti</x-sidebar-link>
-                </div>
+                @if($areItemeDozatoare)
+                    <button type="button" @click="toggle('dozatoare')"
+                            class="mt-4 w-full flex items-center justify-between px-3 py-1.5 text-xs uppercase tracking-wider text-gray-500 hover:text-gray-300 transition">
+                        <span class="flex items-center gap-1.5">
+                            Dozatoare
+                            @if($nrTotalScadente > 0)
+                                <span class="inline-flex items-center justify-center px-1.5 min-w-[1.25rem] h-4 text-[10px] rounded-full bg-amber-500 text-white font-semibold"
+                                      title="Bidoane scadente: {{ $nrDozatoareScadente }} / Filtre scadente: {{ $nrFiltreScadente }}">{{ $nrTotalScadente }}</span>
+                            @endif
+                        </span>
+                        <x-heroicon-m-chevron-down class="w-4 h-4 transition-transform"
+                            x-bind:class="expanded.dozatoare ? '' : '-rotate-90'" />
+                    </button>
+                    <div x-show="expanded.dozatoare" x-cloak
+                         x-transition:enter="transition ease-out duration-150"
+                         x-transition:enter-start="opacity-0"
+                         x-transition:enter-end="opacity-100"
+                         class="space-y-1">
+                        @moduleActiv('dozatoare')
+                            <x-sidebar-link icon="wrench-screwdriver" :href="route('dozatoare.index')" :active="request()->routeIs('dozatoare.*')">
+                                <span>Mentenanta dozatoare</span>
+                                @if($nrTotalScadente > 0)
+                                    <span class="inline-flex items-center justify-center px-1.5 min-w-[1.25rem] h-5 text-[11px] rounded-full bg-amber-500 text-white font-semibold"
+                                          title="Bidoane scadente: {{ $nrDozatoareScadente }} / Filtre scadente: {{ $nrFiltreScadente }}">{{ $nrTotalScadente }}</span>
+                                @endif
+                            </x-sidebar-link>
+                        @endmoduleActiv
+                        @moduleActiv('recipienti')
+                            <x-sidebar-link icon="archive-box" href="#" :active="false">Recipienti</x-sidebar-link>
+                        @endmoduleActiv
+                    </div>
+                @endif
 
                 {{-- ===== FINANCIAR ===== --}}
-                <button type="button" @click="toggle('financiar')"
-                        class="mt-4 w-full flex items-center justify-between px-3 py-1.5 text-xs uppercase tracking-wider text-gray-500 hover:text-gray-300 transition">
-                    <span>Financiar</span>
-                    <x-heroicon-m-chevron-down class="w-4 h-4 transition-transform"
-                        x-bind:class="expanded.financiar ? '' : '-rotate-90'" />
-                </button>
-                <div x-show="expanded.financiar" x-cloak
-                     x-transition:enter="transition ease-out duration-150"
-                     x-transition:enter-start="opacity-0"
-                     x-transition:enter-end="opacity-100"
-                     class="space-y-1">
-                    <x-sidebar-link icon="banknotes" :href="route('cheltuieli.index')" :active="request()->routeIs('cheltuieli.*')">Cheltuieli</x-sidebar-link>
-                    <x-sidebar-link icon="chart-pie" :href="route('rapoarte.stoc')" :active="request()->routeIs('rapoarte.*')">Rapoarte</x-sidebar-link>
-                </div>
+                @php
+                    $areItemeFinanciar = \App\Services\ModuleService::isActive(\App\Models\SetariPlatforma::MODUL_STOC)
+                        || \App\Services\ModuleService::isActive(\App\Models\SetariPlatforma::MODUL_RAPOARTE);
+                @endphp
+                @if($areItemeFinanciar)
+                    <button type="button" @click="toggle('financiar')"
+                            class="mt-4 w-full flex items-center justify-between px-3 py-1.5 text-xs uppercase tracking-wider text-gray-500 hover:text-gray-300 transition">
+                        <span>Financiar</span>
+                        <x-heroicon-m-chevron-down class="w-4 h-4 transition-transform"
+                            x-bind:class="expanded.financiar ? '' : '-rotate-90'" />
+                    </button>
+                    <div x-show="expanded.financiar" x-cloak
+                         x-transition:enter="transition ease-out duration-150"
+                         x-transition:enter-start="opacity-0"
+                         x-transition:enter-end="opacity-100"
+                         class="space-y-1">
+                        @moduleActiv('stoc')
+                            <x-sidebar-link icon="banknotes" :href="route('cheltuieli.index')" :active="request()->routeIs('cheltuieli.*')">Cheltuieli</x-sidebar-link>
+                        @endmoduleActiv
+                        @moduleActiv('rapoarte')
+                            <x-sidebar-link icon="chart-pie" :href="route('rapoarte.stoc')" :active="request()->routeIs('rapoarte.*')">Rapoarte</x-sidebar-link>
+                        @endmoduleActiv
+                    </div>
+                @endif
 
                 {{-- ===== SETARI ===== --}}
                 <button type="button" @click="toggle('setari')"
@@ -159,17 +183,49 @@ new class extends Component
                     <x-sidebar-link icon="squares-2x2" :href="route('setari.catalog')" :active="request()->routeIs('setari.catalog')">Catalog produse</x-sidebar-link>
                     <x-sidebar-link icon="receipt-percent" :href="route('setari.tva')" :active="request()->routeIs('setari.tva')">Cote TVA</x-sidebar-link>
                     <x-sidebar-link icon="user-group" :href="route('setari.utilizatori')" :active="request()->routeIs('setari.utilizatori')">Utilizatori</x-sidebar-link>
-                    <x-sidebar-link icon="document-text" :href="route('setari.facturare')" :active="request()->routeIs('setari.facturare')">Facturare electronica</x-sidebar-link>
-                    <x-sidebar-link icon="document-duplicate" :href="route('setari.contract-template')" :active="request()->routeIs('setari.contract-template')">Sablon contract</x-sidebar-link>
-                    <x-sidebar-link icon="envelope" :href="route('setari.template-email')" :active="request()->routeIs('setari.template-email')">Sabloane email</x-sidebar-link>
-                    <x-sidebar-link icon="paper-airplane" :href="route('setari.smtp')" :active="request()->routeIs('setari.smtp')">Setari SMTP</x-sidebar-link>
-                    <x-sidebar-link icon="clock" :href="route('setari.cron')" :active="request()->routeIs('setari.cron')">Cron jobs</x-sidebar-link>
+                    @moduleActiv('facturare')
+                        <x-sidebar-link icon="document-text" :href="route('setari.facturare')" :active="request()->routeIs('setari.facturare')">Facturare electronica</x-sidebar-link>
+                    @endmoduleActiv
+                    @moduleActiv('contracte')
+                        <x-sidebar-link icon="document-duplicate" :href="route('setari.contract-template')" :active="request()->routeIs('setari.contract-template')">Sablon contract</x-sidebar-link>
+                    @endmoduleActiv
+                    @moduleActiv('email')
+                        <x-sidebar-link icon="envelope" :href="route('setari.template-email')" :active="request()->routeIs('setari.template-email')">Sabloane email</x-sidebar-link>
+                        <x-sidebar-link icon="paper-airplane" :href="route('setari.smtp')" :active="request()->routeIs('setari.smtp')">Setari SMTP</x-sidebar-link>
+                    @endmoduleActiv
+                    @moduleActiv('cron')
+                        <x-sidebar-link icon="clock" :href="route('setari.cron')" :active="request()->routeIs('setari.cron')">Cron jobs</x-sidebar-link>
+                    @endmoduleActiv
                 </div>
+
+                {{-- ===== PLATFORMA (doar SuperAdmin) ===== --}}
+                @if(auth()->user()->isSuperadmin())
+                    <button type="button" @click="toggle('platforma')"
+                            class="mt-4 w-full flex items-center justify-between px-3 py-1.5 text-xs uppercase tracking-wider text-fuchsia-400 hover:text-fuchsia-300 transition">
+                        <span class="flex items-center gap-1.5">
+                            <x-heroicon-m-cog-6-tooth class="w-3.5 h-3.5" />
+                            Platforma
+                        </span>
+                        <x-heroicon-m-chevron-down class="w-4 h-4 transition-transform"
+                            x-bind:class="expanded.platforma ? '' : '-rotate-90'" />
+                    </button>
+                    <div x-show="expanded.platforma" x-cloak
+                         x-transition:enter="transition ease-out duration-150"
+                         x-transition:enter-start="opacity-0"
+                         x-transition:enter-end="opacity-100"
+                         class="space-y-1">
+                        <x-sidebar-link icon="puzzle-piece" :href="route('superadmin.module')" :active="request()->routeIs('superadmin.module')">
+                            Gestionare module
+                        </x-sidebar-link>
+                    </div>
+                @endif
             @endif
 
             @if(auth()->user()->isSofer())
                 <x-sidebar-link icon="map" :href="route('sofer.traseu')" :active="request()->routeIs('sofer.*')">Traseul meu</x-sidebar-link>
-                <x-sidebar-link icon="archive-box" href="#" :active="false">Recipienti</x-sidebar-link>
+                @moduleActiv('recipienti')
+                    <x-sidebar-link icon="archive-box" href="#" :active="false">Recipienti</x-sidebar-link>
+                @endmoduleActiv
             @endif
 
             {{-- Clientii (tip=3) folosesc layout dedicat portal.blade.php cu navigation propriu --}}

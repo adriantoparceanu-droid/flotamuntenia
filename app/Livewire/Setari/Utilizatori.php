@@ -62,16 +62,23 @@ class Utilizatori extends Component
 
     /**
      * Lista de roluri disponibile in UI (cheie = constanta tip, valoare = eticheta RO).
+     * SuperAdmin apare în dropdown DOAR dacă utilizatorul curent este el însuși SuperAdmin.
+     * Adminii obișnuiți nu pot crea sau promova conturi de SuperAdmin.
      */
     public function roluriDisponibile(): array
     {
-        return [
-            User::TIP_ADMIN => 'Administrator',
-            User::TIP_SOFER => 'Sofer',
+        $roluri = [
+            User::TIP_ADMIN    => 'Administrator',
+            User::TIP_SOFER    => 'Sofer',
             User::TIP_GESTIUNE => 'Gestiune',
-            User::TIP_CLIENT => 'Client portal',
-            User::TIP_SUPERADMIN => 'Superadmin platforma',
+            User::TIP_CLIENT   => 'Client portal',
         ];
+
+        if (auth()->user()?->isSuperadmin()) {
+            $roluri[User::TIP_SUPERADMIN] = 'Superadmin platforma';
+        }
+
+        return $roluri;
     }
 
     public function etichetaRol(?int $tip): string
@@ -178,6 +185,12 @@ class Utilizatori extends Component
     public function editeaza(int $id): void
     {
         $u = User::findOrFail($id);
+
+        // Adminii obișnuiți nu pot edita conturi SuperAdmin
+        if ($u->tip === User::TIP_SUPERADMIN && ! auth()->user()?->isSuperadmin()) {
+            session()->flash('eroare', 'Nu aveți permisiunea să editați conturi SuperAdmin.');
+            return;
+        }
         $this->editandId = $u->id;
         $this->name = $u->name;
         $this->email = $u->email;
@@ -193,6 +206,21 @@ class Utilizatori extends Component
     public function salveaza(): void
     {
         $date = $this->validate();
+
+        // Securitate: adminii obișnuiți nu pot crea sau promova conturi SuperAdmin
+        if ((int) $date['tip'] === User::TIP_SUPERADMIN && ! auth()->user()?->isSuperadmin()) {
+            $this->addError('tip', 'Nu aveți permisiunea să creați sau să promovați conturi SuperAdmin.');
+            return;
+        }
+
+        // Securitate: adminul obișnuit nu poate edita un cont SuperAdmin existent
+        if ($this->editandId) {
+            $existentTip = User::where('id', $this->editandId)->value('tip');
+            if ($existentTip === User::TIP_SUPERADMIN && ! auth()->user()?->isSuperadmin()) {
+                session()->flash('eroare', 'Nu aveți permisiunea să editați conturi SuperAdmin.');
+                return;
+            }
+        }
 
         // Securitate: adminul curent nu-si poate schimba propriul rol
         if ($this->editandId && $this->editandId === auth()->id()) {
@@ -283,6 +311,12 @@ class Utilizatori extends Component
             return;
         }
         $u = User::findOrFail($id);
+
+        // Adminii obișnuiți nu pot activa/dezactiva conturi SuperAdmin
+        if ($u->tip === User::TIP_SUPERADMIN && ! auth()->user()?->isSuperadmin()) {
+            session()->flash('eroare', 'Nu aveți permisiunea să modificați conturi SuperAdmin.');
+            return;
+        }
         $u->confirmat = ! $u->confirmat;
         $u->save();
         session()->flash('mesaj', $u->confirmat ? 'Cont activat.' : 'Cont dezactivat.');
@@ -311,6 +345,11 @@ class Utilizatori extends Component
     public function render()
     {
         $query = User::query()->with(['masina', 'client']);
+
+        // Adminii obișnuiți nu văd conturile SuperAdmin în listă
+        if (! auth()->user()?->isSuperadmin()) {
+            $query->where('tip', '!=', User::TIP_SUPERADMIN);
+        }
 
         if ($this->cautare !== '') {
             $query->where(function ($q) {

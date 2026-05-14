@@ -23,6 +23,21 @@ class SetariPlatforma extends Model
     public const CHEIE_CONTRACT_TEMPLATE = 'contract_template_html';
     public const CHEIE_CRON_TOKEN = 'cron_token';
 
+    // Module opționale — valoare '1' = activ, '0' = inactiv
+    public const MODUL_PORTAL_CLIENT     = 'modul_portal_client';
+    public const MODUL_COMENZI_RAPIDE   = 'modul_comenzi_rapide';
+    public const MODUL_PROBLEME         = 'modul_probleme';
+    public const MODUL_DOZATOARE        = 'modul_dozatoare';
+    public const MODUL_RECIPIENTI       = 'modul_recipienti';
+    public const MODUL_STOC             = 'modul_stoc';
+    public const MODUL_FACTURARE        = 'modul_facturare';
+    public const MODUL_CONTRACTE        = 'modul_contracte';
+    public const MODUL_HARTI            = 'modul_harti';
+    public const MODUL_RAPOARTE         = 'modul_rapoarte';
+    public const MODUL_ANAF             = 'modul_anaf';
+    public const MODUL_EMAIL            = 'modul_email';
+    public const MODUL_CRON             = 'modul_cron';
+
     protected $fillable = [
         'cheie',
         'valoare',
