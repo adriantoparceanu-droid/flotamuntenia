@@ -134,9 +134,7 @@ new class extends Component
                                 @endif
                             </x-sidebar-link>
                         @endmoduleActiv
-                        @moduleActiv('recipienti')
-                            <x-sidebar-link icon="archive-box" href="#" :active="false">Recipienti</x-sidebar-link>
-                        @endmoduleActiv
+                        {{-- Recipienti — modul neimplementat inca, ascuns pana la Faza 4 --}}
                     </div>
                 @endif
 
@@ -223,9 +221,7 @@ new class extends Component
 
             @if(auth()->user()->isSofer())
                 <x-sidebar-link icon="map" :href="route('sofer.traseu')" :active="request()->routeIs('sofer.*')">Traseul meu</x-sidebar-link>
-                @moduleActiv('recipienti')
-                    <x-sidebar-link icon="archive-box" href="#" :active="false">Recipienti</x-sidebar-link>
-                @endmoduleActiv
+                {{-- Recipienti — modul neimplementat inca, ascuns pana la Faza 4 --}}
             @endif
 
             {{-- Clientii (tip=3) folosesc layout dedicat portal.blade.php cu navigation propriu --}}

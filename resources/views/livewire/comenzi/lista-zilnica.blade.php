@@ -65,32 +65,62 @@
     @endphp
 
     <x-slot name="header">
-        <h2 class="flex items-center gap-2 font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
-            <x-heroicon-o-truck class="w-6 h-6 text-indigo-600" />
-            Lista livrari
-            <span class="text-sm font-normal text-gray-500">{{ \Carbon\Carbon::parse($data)->locale('ro')->isoFormat('dddd, D MMMM YYYY') }}</span>
-        </h2>
+        <div style="display:flex; align-items:center; justify-content:space-between; width:100%;">
+            <h2 class="flex items-center gap-2 font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
+                <x-heroicon-o-truck class="w-6 h-6 text-indigo-600" />
+                Lista livrari
+            </h2>
+            <div class="text-sm text-gray-500 text-right">
+                {{ \Carbon\Carbon::parse($data)->locale('ro')->isoFormat('dddd, D MMMM YYYY') }}
+                @if($filtruMasina == '0')
+                    &nbsp;·&nbsp; Mașina: <span class="font-medium text-gray-700">Doar nealocate</span>
+                @elseif($filtruMasina)
+                    &nbsp;·&nbsp; Mașina: <span class="font-medium text-gray-700">{{ $masini->firstWhere('id', (int)$filtruMasina)?->denumire ?? '?' }}</span>
+                @else
+                    &nbsp;·&nbsp; Mașina: <span class="font-medium text-gray-700">Toate</span>
+                @endif
+                &nbsp;·&nbsp; Depozit: <span class="font-medium text-gray-700">{{ $idDepozit ? ($depozite->firstWhere('id', (int)$idDepozit)?->denumire ?? '?') : 'Toate' }}</span>
+            </div>
+        </div>
     </x-slot>
 
     <div class="py-6">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-4">
 
+            {{-- Header vizibil DOAR la print --}}
+            <div class="print-only hidden">
+                <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:6pt; margin-bottom:6pt; border-bottom:2px solid #111;">
+                    <h1 style="font-size:13pt; font-weight:700; margin:0;">Lista livrări — FlotaMuntenia</h1>
+                    <p style="font-size:8pt; color:#555; margin:0; text-align:right;">
+                        {{ \Carbon\Carbon::parse($data)->locale('ro')->isoFormat('dddd, D MMMM YYYY') }}
+                        @if($filtruMasina == '0')
+                            &nbsp;·&nbsp; Mașina: <strong>Doar nealocate</strong>
+                        @elseif($filtruMasina)
+                            &nbsp;·&nbsp; Mașina: <strong>{{ $masini->firstWhere('id', (int)$filtruMasina)?->denumire ?? '?' }}</strong>
+                        @else
+                            &nbsp;·&nbsp; Mașina: <strong>Toate</strong>
+                        @endif
+                        &nbsp;·&nbsp; Depozit: <strong>{{ $idDepozit ? ($depozite->firstWhere('id', (int)$idDepozit)?->denumire ?? '?') : 'Toate' }}</strong>
+                    </p>
+                </div>
+            </div>
+
             {{-- Flash messages --}}
             @if (session('mesaj'))
-                <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm rounded-md px-4 py-2 flex items-center gap-2">
+                <div class="no-print bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm rounded-md px-4 py-2 flex items-center gap-2">
                     <x-heroicon-m-check-circle class="w-4 h-4" />
                     {{ session('mesaj') }}
                 </div>
             @endif
             @if (session('eroare'))
-                <div class="bg-red-50 border border-red-200 text-red-800 text-sm rounded-md px-4 py-2 flex items-center gap-2">
+                <div class="no-print bg-red-50 border border-red-200 text-red-800 text-sm rounded-md px-4 py-2 flex items-center gap-2">
                     <x-heroicon-m-x-circle class="w-4 h-4" />
                     {{ session('eroare') }}
                 </div>
             @endif
 
             {{-- Toolbar: data + filtre + butoane principale --}}
-            <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-3">
+            <div class="no-print bg-white dark:bg-gray-800 shadow-sm rounded-lg p-3">
                 <div class="flex flex-wrap items-center gap-2">
                     {{-- Data --}}
                     <div class="flex items-center gap-1">
@@ -128,6 +158,11 @@
                     <div class="flex-1"></div>
 
                     {{-- Butoane principale --}}
+                    <button type="button" onclick="window.print()"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-md shadow-sm border border-gray-300">
+                        <x-heroicon-m-printer class="w-4 h-4" />
+                        Printează
+                    </button>
                     <button type="button" wire:click="salveazaAlocari"
                             class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md shadow-sm">
                         <x-heroicon-m-check class="w-4 h-4" />
@@ -142,7 +177,7 @@
             </div>
 
             {{-- Harta --}}
-            <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
+            <div class="no-print bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
                 @if(empty($apiKey))
                     <div class="bg-amber-50 border-b border-amber-200 p-3 text-xs text-amber-800 flex items-start gap-2">
                         <x-heroicon-o-exclamation-triangle class="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -181,15 +216,15 @@
                         <thead class="bg-gray-50 dark:bg-gray-900/50 text-[11px] uppercase tracking-wide text-gray-500">
                             <tr>
                                 <th class="px-2 py-2 text-left w-10">#</th>
-                                <th class="px-2 py-2 text-center w-12">Tip</th>
+                                <th class="col-print-hide px-2 py-2 text-center w-12">Tip</th>
                                 <th class="px-3 py-2 text-left">Client / Destinatar</th>
                                 <th class="px-3 py-2 text-left">Adresa</th>
                                 <th class="px-3 py-2 text-left">Produse / Descriere</th>
                                 <th class="px-3 py-2 text-right">Suma</th>
-                                <th class="px-3 py-2 text-left w-44">Masina</th>
-                                <th class="px-2 py-2 text-center w-16">Achitat</th>
-                                <th class="px-2 py-2 text-center w-16">Livrat</th>
-                                <th class="px-2 py-2 text-center w-20">Actiuni</th>
+                                <th class="col-print-hide px-3 py-2 text-left w-44">Masina</th>
+                                <th class="col-print-hide px-2 py-2 text-center w-16">Achitat</th>
+                                <th class="col-print-hide px-2 py-2 text-center w-16">Livrat</th>
+                                <th class="col-print-hide px-2 py-2 text-center w-20">Actiuni</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
@@ -202,7 +237,7 @@
                                     </td>
 
                                     {{-- Tip (iconita) --}}
-                                    <td class="px-2 py-2 align-top">
+                                    <td class="col-print-hide px-2 py-2 align-top">
                                         <div class="flex items-center justify-center">
                                             <span title="{{ $i['tip_comanda_label'] }}"
                                                   class="inline-flex items-center justify-center w-7 h-7 rounded-md {{ $culoareTip($i['tip_cod']) }}">
@@ -250,17 +285,19 @@
                                     </td>
 
                                     {{-- Suma + plata --}}
-                                    <td class="px-3 py-2 align-top text-right whitespace-nowrap">
-                                        <div class="font-semibold tabular-nums text-gray-900 dark:text-gray-100">
-                                            {{ number_format($i['total'], 2, ',', '.') }} <span class="text-[11px] font-normal text-gray-500">lei</span>
+                                    <td class="px-3 py-2 align-top whitespace-nowrap">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold {{ $stilPlata($i['mod_plata_cod']) }}">
+                                                {{ $i['mod_plata_short'] }}
+                                            </span>
+                                            <span class="font-semibold tabular-nums text-gray-900 dark:text-gray-100">
+                                                {{ number_format($i['total'], 2, ',', '.') }} <span class="text-[11px] font-normal text-gray-500">lei</span>
+                                            </span>
                                         </div>
-                                        <span class="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold {{ $stilPlata($i['mod_plata_cod']) }}">
-                                            {{ $i['mod_plata_short'] }}
-                                        </span>
                                     </td>
 
                                     {{-- Masina (select pentru alocare) --}}
-                                    <td class="px-3 py-2 align-top">
+                                    <td class="col-print-hide px-3 py-2 align-top">
                                         @php
                                             // Aleg colectia de overlay in functie de tip — toate au structura identica.
                                             $modelOverlay = match ($i['tip']) {
@@ -279,7 +316,7 @@
                                     </td>
 
                                     {{-- Achitat --}}
-                                    <td class="px-2 py-2 align-top text-center">
+                                    <td class="col-print-hide px-2 py-2 align-top text-center">
                                         <input type="checkbox"
                                                wire:click="comutaAchitat('{{ $i['tip'] }}', {{ $i['id'] }})"
                                                {{ $i['achitat'] ? 'checked' : '' }}
@@ -287,7 +324,7 @@
                                     </td>
 
                                     {{-- Livrat --}}
-                                    <td class="px-2 py-2 align-top text-center">
+                                    <td class="col-print-hide px-2 py-2 align-top text-center">
                                         <input type="checkbox"
                                                wire:click="comutaLivrat('{{ $i['tip'] }}', {{ $i['id'] }})"
                                                {{ $i['livrat'] ? 'checked' : '' }}
@@ -295,7 +332,7 @@
                                     </td>
 
                                     {{-- Actiuni --}}
-                                    <td class="px-2 py-2 align-top">
+                                    <td class="col-print-hide px-2 py-2 align-top">
                                         <div class="flex items-center justify-center gap-1">
                                             <a href="{{ $i['ruta_editare'] }}" wire:navigate
                                                title="Editeaza comanda"
@@ -324,90 +361,24 @@
                 </div>
             </div>
 
-            {{-- Footer: header sumar + total + breakdown plata --}}
+            {{-- Footer: total + breakdown plata --}}
             @if($itemi->isNotEmpty())
                 <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
-                    {{-- Header bar --}}
-                    <div class="bg-gray-700 text-white px-4 py-2 flex items-center justify-between text-sm">
-                        <div class="flex items-center gap-3">
-                            <span class="font-medium">Sumar zilnic</span>
-                            <span class="text-gray-300 text-xs">{{ $totalLivrate }}/{{ $totalItemi }} livrate</span>
-                        </div>
-                        <div class="flex items-center gap-4 text-xs">
-                            <div>
-                                <span class="text-gray-300">19L:</span>
-                                <span class="font-semibold tabular-nums">{{ $sumar19l }}</span>
-                            </div>
-                            <div>
-                                <span class="text-gray-300">11L:</span>
-                                <span class="font-semibold tabular-nums">{{ $sumar11l }}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {{-- Total general + breakdown plata --}}
-                    <div class="px-4 py-3 grid grid-cols-1 md:grid-cols-2 gap-3 border-b border-gray-100 dark:border-gray-700">
+                    <div class="px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-1">
                         <div class="flex items-baseline gap-2">
                             <span class="text-sm text-gray-600 dark:text-gray-400">Total suma:</span>
                             <span class="text-xl font-bold tabular-nums text-gray-900 dark:text-gray-100">
                                 {{ number_format($totalGlobal, 2, ',', '.') }} lei
                             </span>
                         </div>
-                        <div class="flex flex-wrap items-center justify-end gap-x-4 gap-y-1 text-xs">
-                            <span><span class="text-gray-500">Cash:</span> <span class="font-semibold tabular-nums text-emerald-700">{{ number_format($totalPePlata[1] ?? 0, 2, ',', '.') }}</span></span>
-                            <span><span class="text-gray-500">OP:</span> <span class="font-semibold tabular-nums text-blue-700">{{ number_format($totalPePlata[2] ?? 0, 2, ',', '.') }}</span></span>
-                            <span><span class="text-gray-500">Card:</span> <span class="font-semibold tabular-nums text-purple-700">{{ number_format($totalPePlata[3] ?? 0, 2, ',', '.') }}</span></span>
+                        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                            <span class="text-gray-500">Cash: <span class="font-semibold tabular-nums text-emerald-700">{{ number_format($totalPePlata[1] ?? 0, 2, ',', '.') }}</span></span>
+                            <span class="text-gray-500">OP: <span class="font-semibold tabular-nums text-blue-700">{{ number_format($totalPePlata[2] ?? 0, 2, ',', '.') }}</span></span>
+                            <span class="text-gray-500">Card: <span class="font-semibold tabular-nums text-purple-700">{{ number_format($totalPePlata[3] ?? 0, 2, ',', '.') }}</span></span>
                             @if(($totalPePlata[4] ?? 0) > 0)
-                                <span><span class="text-gray-500">Alta:</span> <span class="font-semibold tabular-nums text-gray-700">{{ number_format($totalPePlata[4] ?? 0, 2, ',', '.') }}</span></span>
+                                <span class="text-gray-500">Alta: <span class="font-semibold tabular-nums text-gray-700">{{ number_format($totalPePlata[4] ?? 0, 2, ',', '.') }}</span></span>
                             @endif
                         </div>
-                    </div>
-
-                    {{-- Sume achitate per masina --}}
-                    <div>
-                        <div class="px-4 py-2 bg-gray-50 dark:bg-gray-900/50 text-xs font-medium text-gray-600 dark:text-gray-400">
-                            Sume achitate per sofer / masina
-                        </div>
-                        <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-700 text-xs">
-                            <thead class="text-[11px] uppercase tracking-wide text-gray-500">
-                                <tr>
-                                    <th class="px-4 py-1.5 text-left">Sofer / Masina</th>
-                                    <th class="px-3 py-1.5 text-right">Cash</th>
-                                    <th class="px-3 py-1.5 text-right">OP</th>
-                                    <th class="px-3 py-1.5 text-right">Card</th>
-                                    <th class="px-3 py-1.5 text-right">Alta</th>
-                                    <th class="px-3 py-1.5 text-right">Total achitat</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                                @foreach($sumarPerMasina as $cheie => $s)
-                                    <tr>
-                                        <td class="px-4 py-1.5 flex items-center gap-2">
-                                            <span class="inline-block w-2.5 h-2.5 rounded-full" style="background:{{ $s['culoare'] }};"></span>
-                                            <span class="font-medium text-gray-700 dark:text-gray-300">{{ $s['nume'] }}</span>
-                                            @if($s['nr_inmatriculare'])
-                                                <span class="text-gray-400 text-[10px]">{{ $s['nr_inmatriculare'] }}</span>
-                                            @endif
-                                        </td>
-                                        <td class="px-3 py-1.5 text-right tabular-nums {{ $s['cash'] > 0 ? 'text-emerald-700 font-semibold' : 'text-gray-400' }}">
-                                            {{ number_format($s['cash'], 2, ',', '.') }}
-                                        </td>
-                                        <td class="px-3 py-1.5 text-right tabular-nums {{ $s['op'] > 0 ? 'text-blue-700 font-semibold' : 'text-gray-400' }}">
-                                            {{ number_format($s['op'], 2, ',', '.') }}
-                                        </td>
-                                        <td class="px-3 py-1.5 text-right tabular-nums {{ $s['card'] > 0 ? 'text-purple-700 font-semibold' : 'text-gray-400' }}">
-                                            {{ number_format($s['card'], 2, ',', '.') }}
-                                        </td>
-                                        <td class="px-3 py-1.5 text-right tabular-nums {{ $s['alta'] > 0 ? 'text-gray-700 font-semibold' : 'text-gray-400' }}">
-                                            {{ number_format($s['alta'], 2, ',', '.') }}
-                                        </td>
-                                        <td class="px-3 py-1.5 text-right tabular-nums font-bold text-gray-900 dark:text-gray-100">
-                                            {{ number_format($s['total'], 2, ',', '.') }} lei
-                                        </td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
                     </div>
                 </div>
             @endif
@@ -417,7 +388,7 @@
 
     {{-- Modal stergere --}}
     @if($modalStergere)
-        <div class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
+        <div class="no-print fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
             <div class="flex min-h-screen items-center justify-center p-4">
                 <div class="fixed inset-0 bg-gray-900/50" wire:click="inchideModalStergere"></div>
                 <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-5">
@@ -450,6 +421,50 @@
     @endif
 
     @assets
+        <style>
+            @media print {
+                /* Ascunde sidebar-ul si header-ul paginii */
+                aside,
+                body > div > header { display: none !important; }
+
+                /* Elimina padding-ul din layout (lg:pl-64) */
+                .lg\:pl-64 { padding-left: 0 !important; }
+
+                /* Elemente marcate explicit ca no-print */
+                .no-print { display: none !important; }
+
+                /* Elemente vizibile doar la print */
+                .print-only { display: block !important; }
+
+                /* Curatare generala */
+                body { background: white !important; font-size: 10pt; color: #000; }
+                main { min-height: 0 !important; }
+                .shadow-sm, .shadow { box-shadow: none !important; }
+                .rounded-lg { border-radius: 0 !important; }
+                .overflow-hidden { overflow: visible !important; }
+                .py-6 { padding-top: 8pt !important; padding-bottom: 0 !important; }
+                .space-y-4 > * + * { margin-top: 10pt !important; }
+
+                /* Tabel principal */
+                table { border-collapse: collapse !important; width: 100% !important; font-size: 9pt; }
+                th, td { border: 1px solid #bbb !important; padding: 3px 5px !important; }
+                thead th { background-color: #f3f4f6 !important; font-weight: 600; text-transform: uppercase; font-size: 8pt; }
+                tbody tr:nth-child(even) { background-color: #fafafa !important; }
+                tbody tr.bg-emerald-50\/30 { background-color: #f0fdf4 !important; }
+
+                /* Coloane ascunse la print */
+                .col-print-hide { display: none !important; }
+
+                /* Elimina link-urile colorate */
+                a { color: #000 !important; text-decoration: none !important; }
+
+                /* Sectiunea sumar */
+                .bg-gray-700 { background-color: #374151 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+                /* Pagina A4 landscape */
+                @page { margin: 1.2cm; size: A4 landscape; }
+            }
+        </style>
         @if($apiKey)
             <script async defer
                     src="https://maps.googleapis.com/maps/api/js?key={{ $apiKey }}&callback=initListaZilnicaMap&loading=async"></script>
