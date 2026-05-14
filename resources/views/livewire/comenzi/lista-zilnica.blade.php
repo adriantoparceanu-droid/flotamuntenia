@@ -163,7 +163,7 @@
                          hidden></div>
 
                     <div class="relative">
-                        <div wire:ignore id="harta-traseu" class="w-full h-[28rem]"></div>
+                        <div wire:ignore id="harta-traseu" class="w-full h-[44rem]"></div>
                         @if(empty($puncteHarta))
                             <div class="absolute inset-0 flex flex-col items-center justify-center bg-white/95 text-xs text-gray-400 italic pointer-events-none">
                                 <x-heroicon-o-map class="w-12 h-12 mb-2 text-gray-300" />
@@ -489,10 +489,10 @@
                     { featureType: 'poi', stylers: [{ visibility: 'off' }] },
                     { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#eef2f5' }, { visibility: 'on' }] },
                     { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
-                    { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#fafafa' }] },
-                    { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#f3f4f6' }] },
+                    { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#d4d4d4' }] },
+                    { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#b8b8b8' }] },
                     { featureType: 'road.local', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
-                    { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#9ca3af' }] },
+                    { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#6b7280' }] },
                     { featureType: 'transit', stylers: [{ visibility: 'off' }] },
                     { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#dbeafe' }] },
                     { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#93c5fd' }] },
@@ -557,6 +557,10 @@
                 window.__alocaDinHarta = (tip, id, valoare) => {
                     if (typeof Livewire === 'undefined') return;
                     Livewire.dispatch('aloca-masina-harta', { tip, id, valoare });
+                    if (window.__hartaInfoWindow) {
+                        window.__hartaInfoWindow.close();
+                        window.__hartaInfoWindowPin = null;
+                    }
                 };
 
                 const renderHarta = () => {
@@ -591,7 +595,9 @@
                         return;
                     }
 
-                    if (!window.__harta) {
+                    const hartaNoua = !window.__harta;
+
+                    if (hartaNoua) {
                         window.__harta = new google.maps.Map(div, {
                             zoom: 12,
                             center: { lat: puncte[0].lat, lng: puncte[0].lng },
@@ -684,8 +690,14 @@
                         }
                     });
 
-                    // fitBounds doar cand setul de coordonate s-a schimbat
-                    if (bounds && puncte.length > 1) harta.fitBounds(bounds);
+                    // fitBounds: la harta noua asteapta idle (map montat in DOM); la harta existenta apeleaza direct
+                    if (bounds && puncte.length > 1) {
+                        if (hartaNoua) {
+                            google.maps.event.addListenerOnce(harta, 'idle', () => harta.fitBounds(bounds, 20));
+                        } else {
+                            harta.fitBounds(bounds, 20);
+                        }
+                    }
                 };
 
                 window.__renderListaZilnica = renderHarta;
