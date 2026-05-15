@@ -218,7 +218,7 @@
                                 </div>
                                 <div class="col-span-4 md:col-span-1">
                                     <label class="block text-[11px] text-gray-500">Cant.</label>
-                                    <input type="number" min="1" wire:model.live.debounce.300ms="linii.{{ $idx }}.cantitate"
+                                    <input type="number" wire:model.live.debounce.300ms="linii.{{ $idx }}.cantitate"
                                            class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-xs tabular-nums" />
                                     @error("linii.{$idx}.cantitate") <span class="text-[11px] text-red-600">{{ $message }}</span> @enderror
                                 </div>

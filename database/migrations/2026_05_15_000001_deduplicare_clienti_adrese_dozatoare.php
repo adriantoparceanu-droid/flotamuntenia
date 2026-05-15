@@ -31,8 +31,10 @@ return new class extends Migration
 
     private function deduplicareClienti(): void
     {
+        // Folosim MIN(id) + subquery separat — GROUP_CONCAT cu ORDER BY
+        // nu e suportat in SQLite (compatibilitate SQLite + MySQL).
         $grupuri = DB::table('clienti')
-            ->select('cif', DB::raw('MIN(id) as id_keep'), DB::raw('GROUP_CONCAT(id ORDER BY id ASC) as toate_ids'))
+            ->select('cif', DB::raw('MIN(id) as id_keep'))
             ->whereNotNull('cif')
             ->where('cif', '!=', '')
             ->groupBy('cif')
@@ -40,9 +42,13 @@ return new class extends Migration
             ->get();
 
         foreach ($grupuri as $grup) {
-            $ids       = array_map('intval', explode(',', $grup->toate_ids));
-            $idKeep    = $grup->id_keep;
-            $idsDeSters = array_filter($ids, fn($id) => $id !== $idKeep);
+            $idKeep     = (int) $grup->id_keep;
+            $idsDeSters = DB::table('clienti')
+                ->where('cif', $grup->cif)
+                ->where('id', '!=', $idKeep)
+                ->pluck('id')
+                ->map(fn($id) => (int) $id)
+                ->all();
 
             foreach ([
                 'adresa_livrare' => 'id_client',

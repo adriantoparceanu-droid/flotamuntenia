@@ -200,52 +200,16 @@ class Form extends Component
         $this->idMasina = $produs->id_masina;
         $this->idDepozit = $produs->id_depozit;
 
-        // Suprascriem tip + linii in functie de tipul configuratiei
+        // Auto-detectare tip + linii din configurarea adresei
         if ($produs->isAbonament()) {
             $this->tipComanda = Comanda::TIP_ABONAMENT;
-            $this->linii = [[
-                'id_produs' => null, // linie custom — denumirea abonamentului
-                'denumire' => $produs->denumire_abonament ?: 'Abonament lunar',
-                'cantitate' => 1,
-                'pret' => (string) $produs->pret,
-            ]];
         } elseif ($produs->abonament === Produs::TIP_PER_BUCATA) {
             $this->tipComanda = Comanda::TIP_FARA_ABONAMENT;
-            $linii = [];
-            $produs19l = CostProduct::find(45);
-            $produs11l = CostProduct::find(46);
-            if ($produs19l) {
-                $linii[] = [
-                    'id_produs' => 45,
-                    'denumire' => $produs19l->denumire,
-                    'cantitate' => 0,
-                    'pret' => (string) $produs->pret,
-                ];
-            }
-            if ($produs11l) {
-                $linii[] = [
-                    'id_produs' => 46,
-                    'denumire' => $produs11l->denumire,
-                    'cantitate' => 0,
-                    'pret' => (string) $produs->pret_11l,
-                ];
-            }
-            $this->linii = ! empty($linii) ? $linii : [[
-                'id_produs' => null,
-                'denumire' => '',
-                'cantitate' => 1,
-                'pret' => '0.00',
-            ]];
         } else {
-            // FILTRE / APARATE — fara linii pre-completate, dar pastram tipul
             $this->tipComanda = Comanda::TIP_FARA_ABONAMENT;
-            $this->linii = [[
-                'id_produs' => null,
-                'denumire' => '',
-                'cantitate' => 1,
-                'pret' => '0.00',
-            ]];
         }
+
+        $this->linii = $this->liniiDinProdusCfg($produs, $this->tipComanda);
     }
 
     /**
@@ -258,12 +222,100 @@ class Form extends Component
         $this->nume = '';
         $this->telefon = '';
         $this->observatii = '';
-        $this->linii = [[
-            'id_produs' => null,
-            'denumire' => '',
-            'cantitate' => 1,
-            'pret' => '0.00',
-        ]];
+        $this->linii = $this->linieGoalaDefault();
+    }
+
+    /**
+     * Construieste liniile de produse din configurarea adresei (tabel `produs`)
+     * in functie de tipul comenzii selectat.
+     *
+     * - TIP_ABONAMENT:          nr_bidoane reale (19L/11L), pret = total / total_bidoane
+     * - TIP_CONSUM_SUPLIMENTAR: pret_suplimentar_19l/11l cu fallback la pret/pret_11l
+     * - TIP_FARA_ABONAMENT:     pret per bucata (pret/pret_11l)
+     */
+    private function liniiDinProdusCfg(Produs $produs, string $tip): array
+    {
+        if ($tip === Comanda::TIP_ABONAMENT && $produs->isAbonament()) {
+            $nr19l = (int) ($produs->nr_bidoane ?? 0);
+            $nr11l = (int) ($produs->nr_bidoane_11l ?? 0);
+            $totalBidoane = $nr19l + $nr11l;
+
+            if ($totalBidoane === 0) {
+                // Config incompleta — fallback la linie custom cu pretul total
+                return [[
+                    'id_produs' => null,
+                    'denumire' => $produs->denumire_abonament ?: 'Abonament lunar',
+                    'cantitate' => 1,
+                    'pret' => (string) ((float) $produs->pret),
+                ]];
+            }
+
+            $pretPerBidon = round((float) $produs->pret / $totalBidoane, 4);
+            $linii = [];
+
+            if ($nr19l > 0) {
+                $p19 = CostProduct::find(45);
+                $linii[] = [
+                    'id_produs' => 45,
+                    'denumire' => $p19?->denumire ?? 'APA PLATA 19L',
+                    'cantitate' => $nr19l,
+                    'pret' => (string) $pretPerBidon,
+                ];
+            }
+
+            if ($nr11l > 0) {
+                $p11 = CostProduct::find(46);
+                $linii[] = [
+                    'id_produs' => 46,
+                    'denumire' => $p11?->denumire ?? 'APA PLATA 11L',
+                    'cantitate' => $nr11l,
+                    'pret' => (string) $pretPerBidon,
+                ];
+            }
+
+            return $linii ?: $this->linieGoalaDefault();
+        }
+
+        if ($tip === Comanda::TIP_CONSUM_SUPLIMENTAR) {
+            $p19  = CostProduct::find(45);
+            $p11  = CostProduct::find(46);
+            $pr19 = (string) ((float) ($produs->pret_suplimentar_19l ?? $produs->pret));
+            $pr11 = (string) ((float) ($produs->pret_suplimentar_11l ?? $produs->pret_11l));
+            $linii = [];
+
+            if ($p19) {
+                $linii[] = ['id_produs' => 45, 'denumire' => $p19->denumire, 'cantitate' => 0, 'pret' => $pr19];
+            }
+            if ($p11) {
+                $linii[] = ['id_produs' => 46, 'denumire' => $p11->denumire, 'cantitate' => 0, 'pret' => $pr11];
+            }
+
+            return $linii ?: $this->linieGoalaDefault();
+        }
+
+        // TIP_FARA_ABONAMENT pe config per-bucata
+        if ($produs->abonament === Produs::TIP_PER_BUCATA) {
+            $p19  = CostProduct::find(45);
+            $p11  = CostProduct::find(46);
+            $linii = [];
+
+            if ($p19) {
+                $linii[] = ['id_produs' => 45, 'denumire' => $p19->denumire, 'cantitate' => 0, 'pret' => (string) ((float) $produs->pret)];
+            }
+            if ($p11) {
+                $linii[] = ['id_produs' => 46, 'denumire' => $p11->denumire, 'cantitate' => 0, 'pret' => (string) ((float) $produs->pret_11l)];
+            }
+
+            return $linii ?: $this->linieGoalaDefault();
+        }
+
+        // Filtre / Aparate — fara configurare relevanta
+        return $this->linieGoalaDefault();
+    }
+
+    private function linieGoalaDefault(): array
+    {
+        return [['id_produs' => null, 'denumire' => '', 'cantitate' => 1, 'pret' => '0.00']];
     }
 
     private function linieEsteGoala(array $l): bool
@@ -273,6 +325,24 @@ class Form extends Component
         // sunt rezultatul `adaugaLinieGoala()`, nu un input al admin-ului.
         return empty($l['id_produs'])
             && trim((string) ($l['denumire'] ?? '')) === '';
+    }
+
+    /**
+     * Cand admin schimba tipul comenzii, reincarca liniile din configurarea
+     * adresei curente in functie de noul tip — reload complet, intentionat.
+     */
+    public function updatedTipComanda(): void
+    {
+        if (! $this->idAdresa) {
+            return;
+        }
+
+        $produs = AdresaLivrare::with('produs')->find($this->idAdresa)?->produs;
+        if (! $produs) {
+            return;
+        }
+
+        $this->linii = $this->liniiDinProdusCfg($produs, $this->tipComanda);
     }
 
     /**
@@ -355,7 +425,7 @@ class Form extends Component
             'linii' => ['required', 'array', 'min:1'],
             'linii.*.denumire' => ['required_without:linii.*.id_produs', 'nullable', 'string', 'max:255'],
             'linii.*.id_produs' => ['nullable', 'exists:cost_products,id'],
-            'linii.*.cantitate' => ['required', 'integer', 'min:1'],
+            'linii.*.cantitate' => ['required', 'integer'],
             'linii.*.pret' => ['required', 'numeric', 'min:0'],
         ];
 
@@ -376,7 +446,7 @@ class Form extends Component
             'linii.min' => 'Adauga cel putin un produs.',
             'linii.*.denumire.required_without' => 'Denumirea liniei e obligatorie cand nu selectezi un produs din catalog.',
             'linii.*.cantitate.required' => 'Cantitatea e obligatorie pe fiecare linie.',
-            'linii.*.cantitate.min' => 'Cantitatea trebuie sa fie cel putin 1.',
+            'linii.*.cantitate.integer' => 'Cantitatea trebuie sa fie un numar intreg (pozitiv sau negativ).',
         ]);
 
         // Calcul cantitati 19L/11L (denormalizate la nivel de comanda)
