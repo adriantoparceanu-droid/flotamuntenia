@@ -91,7 +91,7 @@
                                             <span class="text-xs text-gray-500 block">{{ $c->client->email }}</span>
                                         @endif
                                         @if($c->adresa)
-                                            <span class="text-xs text-gray-400 block">{{ $c->adresa->denumire }}</span>
+                                            <span class="text-xs text-gray-400 block">{{ $c->adresa->eticheta }}</span>
                                         @endif
                                     </td>
                                     <td class="px-3 py-2 text-gray-700 dark:text-gray-300 text-xs">

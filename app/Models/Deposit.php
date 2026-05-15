@@ -11,13 +11,20 @@ class Deposit extends Model
         'denumire',
         'adresa',
         'activ',
+        'implicit',
     ];
 
     protected function casts(): array
     {
         return [
-            'activ' => 'boolean',
+            'activ'    => 'boolean',
+            'implicit' => 'boolean',
         ];
+    }
+
+    public static function implicit(): ?self
+    {
+        return self::where('implicit', true)->where('activ', true)->first();
     }
 
     public function masini(): HasMany

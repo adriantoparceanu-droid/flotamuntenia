@@ -68,7 +68,7 @@
                                 <option value="">@if(! $idClient)— alege intai clientul —@else— alege adresa —@endif</option>
                                 @foreach($adrese as $a)
                                     <option value="{{ $a->id }}">
-                                        {{ $a->denumire }}{{ $a->oras ? ' · ' . $a->oras : '' }}
+                                        {{ $a->eticheta }}
                                     </option>
                                 @endforeach
                             </select>

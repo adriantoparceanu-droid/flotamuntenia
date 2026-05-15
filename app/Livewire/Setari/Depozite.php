@@ -82,6 +82,13 @@ class Depozite extends Component
         session()->flash('mesaj', 'Depozit salvat cu succes.');
     }
 
+    public function setaImplicit(int $id): void
+    {
+        Deposit::where('id', '!=', $id)->update(['implicit' => false]);
+        Deposit::findOrFail($id)->update(['implicit' => true]);
+        session()->flash('mesaj', 'Depozit implicit setat cu succes.');
+    }
+
     public function comutaActiv(int $id): void
     {
         $depozit = Deposit::findOrFail($id);

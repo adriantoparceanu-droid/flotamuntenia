@@ -5,13 +5,17 @@ namespace App\Livewire\Clienti;
 use App\Models\AdresaLivrare;
 use App\Models\Car;
 use App\Models\Client;
+use App\Models\CostProduct;
 use App\Models\Deposit;
 use App\Models\Dozator;
 use App\Models\DozatorFiltre;
+use App\Models\DozatorFiltreIstoric;
 use App\Models\Problema;
 use App\Models\Produs;
 use App\Models\Recipient;
+use App\Models\Vizita;
 use App\Services\ContracteService;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -64,6 +68,43 @@ class Detalii extends Component
     public ?int $abIdDepozit = null;
     public string $abObservatii = '';
 
+    // ===== Sub-modal: Aparat (dozator cu bidoane) in cadrul Configurare livrare =====
+    public bool $modalAparatNou = false;
+    public ?int $aparatEditId = null;
+    public ?int $aparatIdProdus = null;
+    public string $aparatSerie = '';
+    public string $aparatTranzactie = 'custodie';
+    public string $aparatDataInstalare = '';
+    public string $aparatDataIgienizare = '';
+    public string $aparatObservatii = '';
+
+    // ===== Sub-modal: Purificator (dozator cu filtre) in cadrul Configurare livrare =====
+    public bool $modalPurificatorNou = false;
+    public ?int $purificatorEditId = null;
+    public ?int $purificatorIdProdus = null;
+    public string $purificatorSerie = '';
+    public string $purificatorTranzactie = 'custodie';
+    public string $purificatorDataInstalare = '';
+    public string $purificatorDataMentenanta = '';
+    public string $purificatorGarantie = '0.00';
+    public string $purificatorObservatii = '';
+
+    // ===== Modal Vizite (Dozatoare cu bidoane — igienizari) =====
+    public bool $modalVizite = false;
+    public ?int $viziteForDozatorId = null;
+    public string $vizDataVizita = '';
+    public string $vizDataUrmatoare = '';
+    public string $vizPret = '';
+    public string $vizObservatii = '';
+
+    // ===== Modal Interventie (Dozatoare cu filtre — mentenanta) =====
+    public bool $modalInterventie = false;
+    public ?int $interventieForFiltruId = null;
+    public string $intDataInterventie = '';
+    public string $intDataUrmatoare = '';
+    public string $intPret = '';
+    public string $intObservatii = '';
+
     // ===== Modal recipienti (admin — corectie manuala) =====
     public bool $modalRecipientiAdmin = false;
     public ?int $recAdresaId = null;
@@ -90,11 +131,15 @@ class Detalii extends Component
     public function mount(Client $client): void
     {
         $this->client = $client;
+        // Tab-ul dozatoare a fost mutat inline in Adrese — redirecteaza URL-uri vechi
+        if ($this->tab === 'dozatoare') {
+            $this->tab = 'adrese';
+        }
     }
 
     public function comutaTab(string $tab): void
     {
-        $valide = ['general', 'adrese', 'comenzi', 'probleme', 'dozatoare', 'recipienti', 'documente', 'contract'];
+        $valide = ['general', 'adrese', 'comenzi', 'probleme', 'recipienti', 'documente', 'contract'];
         $this->tab = in_array($tab, $valide, true) ? $tab : 'general';
 
         if ($this->tab === 'contract') {
@@ -294,7 +339,7 @@ class Detalii extends Component
     {
         // Validare adaptiva per tip
         $reguliComune = [
-            'abTip' => ['required', 'in:0,1,2,3'],
+            'abTip' => ['required', 'in:0,1,2'],
             'abIdMasina' => ['nullable', 'exists:cars,id'],
             'abIdDepozit' => ['nullable', 'exists:deposits,id'],
             'abObservatii' => ['nullable', 'string'],
@@ -316,8 +361,11 @@ class Detalii extends Component
                 'abPret11l' => ['required', 'numeric', 'min:0'],
             ]);
         } else {
-            // tip 2 (filtre) si 3 (aparate) — doar campurile comune sunt obligatorii
-            $reguli = $reguliComune;
+            // tip 2 (purificator/filtre) — pret lunar + data prima facturare
+            $reguli = array_merge($reguliComune, [
+                'abPret' => ['required', 'numeric', 'min:0'],
+                'abZiLivrare' => ['required', 'date'],
+            ]);
         }
 
         $date = $this->validate($reguli, [
@@ -341,11 +389,12 @@ class Detalii extends Component
         }
 
         // Semantica preturilor difera per tip:
-        //  - ABONAMENT:    pret = pret fix lunar; pret_11l = neutilizat; pret_suplimentar_* = consum peste pachet
-        //  - PER BUCATA:   pret = pret/bidon 19L; pret_11l = pret/bidon 11L; pret_suplimentar_* = neutilizate
-        //  - FILTRE/APARATE: toate preturile = 0
+        //  - ABONAMENT (1): pret = pret fix lunar; suplimentar_* = consum peste pachet
+        //  - PER BUCATA (0): pret = pret/bidon 19L; pret_11l = pret/bidon 11L
+        //  - FILTRE/PURIFICATOR (2): pret = taxa lunara serviciu; nr_bidoane = 0
         $estePerBucata = $this->abTip === Produs::TIP_PER_BUCATA;
         $esteAbonament = $this->abTip === Produs::TIP_ABONAMENT;
+        $esteFiltre    = $this->abTip === Produs::TIP_FILTRE;
 
         $payload = [
             'id_adresa' => $this->abonamentAdresaId,
@@ -354,13 +403,12 @@ class Detalii extends Component
             'denumire_abonament' => $esteAbonament ? trim($this->abDenumireAbonament) : null,
             'nr_bidoane' => $esteAbonament ? (int) $this->abNrBidoane : 0,
             'nr_bidoane_11l' => $esteAbonament ? (int) $this->abNrBidoane11l : 0,
-            'pret' => ($esteAbonament || $estePerBucata) ? $this->abPret : 0,
+            'pret' => ($esteAbonament || $estePerBucata || $esteFiltre) ? $this->abPret : 0,
             'pret_11l' => $estePerBucata ? $this->abPret11l : 0,
             'pret_suplimentar_19l' => $esteAbonament ? $this->abPretSuplimentar19l : null,
             'pret_suplimentar_11l' => $esteAbonament ? $this->abPretSuplimentar11l : null,
-            // Abonamentul lunar e strict lunar — nu mai folosim 'frecventa'.
             'frecventa' => null,
-            'zi_livrare' => $esteAbonament && $this->abZiLivrare !== '' ? $this->abZiLivrare : null,
+            'zi_livrare' => ($esteAbonament || $esteFiltre) && $this->abZiLivrare !== '' ? $this->abZiLivrare : null,
             'id_masina' => $this->abIdMasina,
             'id_depozit' => $this->abIdDepozit,
             'observatii' => $this->abObservatii ?: null,
@@ -391,9 +439,347 @@ class Detalii extends Component
         $this->abFrecventa = '';
         $this->abZiLivrare = '';
         $this->abIdMasina = null;
-        $this->abIdDepozit = null;
+        $this->abIdDepozit = Deposit::implicit()?->id;
         $this->abObservatii = '';
         $this->resetErrorBag();
+    }
+
+    // ===== Sub-modal Aparat (dozator cu bidoane) =====
+
+    public function deschideModalAparat(?int $id = null, ?int $adresaId = null): void
+    {
+        $this->resetFormAparat();
+        if ($adresaId) {
+            $this->abonamentAdresaId = $adresaId;
+        }
+        if ($id) {
+            $aparat = Dozator::where('id_client', $this->client->id)
+                ->findOrFail($id);
+            if (! $this->abonamentAdresaId) {
+                $this->abonamentAdresaId = $aparat->id_adresa;
+            }
+            $this->aparatEditId      = $aparat->id;
+            $this->aparatIdProdus    = $aparat->id_produs;
+            $this->aparatSerie       = $aparat->serie ?? '';
+            $this->aparatTranzactie  = $aparat->tranzactie ?? 'custodie';
+            $this->aparatDataInstalare  = $aparat->data_instalare?->format('Y-m-d') ?? now()->toDateString();
+            $this->aparatDataIgienizare = $aparat->perioada_igenizare?->format('Y-m-d') ?? '';
+            $this->aparatObservatii  = $aparat->observatii ?? '';
+        }
+        $this->modalAparatNou = true;
+    }
+
+    public function inchideModalAparat(): void
+    {
+        $this->modalAparatNou = false;
+        $this->resetFormAparat();
+    }
+
+    public function salveazaAparat(): void
+    {
+        $this->validate([
+            'aparatIdProdus'       => ['required', 'exists:cost_products,id'],
+            'aparatSerie'          => ['nullable', 'string', 'max:100'],
+            'aparatTranzactie'     => ['required', 'in:custodie,cumparat'],
+            'aparatDataInstalare'  => ['required', 'date'],
+            'aparatDataIgienizare' => ['nullable', 'date'],
+            'aparatObservatii'     => ['nullable', 'string'],
+        ], [
+            'aparatIdProdus.required'      => 'Selecteaza produsul.',
+            'aparatDataInstalare.required' => 'Data instalarii este obligatorie.',
+        ]);
+
+        $payload = [
+            'id_client'          => $this->client->id,
+            'id_adresa'          => $this->abonamentAdresaId,
+            'id_produs'          => $this->aparatIdProdus,
+            'serie'              => $this->aparatSerie ?: null,
+            'tranzactie'         => $this->aparatTranzactie,
+            'data_instalare'     => $this->aparatDataInstalare,
+            'perioada_igenizare' => $this->aparatDataIgienizare ?: null,
+            'activ'              => true,
+            'comanda'            => false,
+            'observatii'         => $this->aparatObservatii ?: null,
+        ];
+
+        if ($this->aparatEditId) {
+            Dozator::where('id_client', $this->client->id)
+                ->where('id', $this->aparatEditId)
+                ->update($payload);
+        } else {
+            Dozator::create($payload);
+        }
+
+        $this->inchideModalAparat();
+    }
+
+    public function stergeAparat(int $id): void
+    {
+        $ap = Dozator::where('id_client', $this->client->id)->findOrFail($id);
+        $ap->update(['activ' => ! $ap->activ]);
+    }
+
+    private function resetFormAparat(): void
+    {
+        $this->aparatEditId         = null;
+        $this->aparatIdProdus       = null;
+        $this->aparatSerie          = '';
+        $this->aparatTranzactie     = 'custodie';
+        $this->aparatDataInstalare  = now()->toDateString();
+        $this->aparatDataIgienizare = now()->addMonths(6)->toDateString();
+        $this->aparatObservatii     = '';
+        $this->resetErrorBag();
+    }
+
+    // ===== Sub-modal Purificator (dozator cu filtre) =====
+
+    public function deschideModalPurificator(?int $id = null, ?int $adresaId = null): void
+    {
+        $this->resetFormPurificator();
+        if ($adresaId) {
+            $this->abonamentAdresaId = $adresaId;
+        }
+        if ($id) {
+            $pf = DozatorFiltre::where('id_client', $this->client->id)
+                ->findOrFail($id);
+            if (! $this->abonamentAdresaId) {
+                $this->abonamentAdresaId = $pf->id_adresa;
+            }
+            $this->purificatorEditId        = $pf->id;
+            $this->purificatorIdProdus      = $pf->id_produs;
+            $this->purificatorSerie         = $pf->serie ?? '';
+            $this->purificatorTranzactie    = $pf->tranzactie ?? 'custodie';
+            $this->purificatorDataInstalare = $pf->data_instalare?->format('Y-m-d') ?? now()->toDateString();
+            $this->purificatorDataMentenanta = $pf->data_urmatoare_mentenanta?->format('Y-m-d') ?? '';
+            $this->purificatorGarantie      = $pf->suma_garantie !== null ? (string) $pf->suma_garantie : '0.00';
+            $this->purificatorObservatii    = $pf->observatii ?? '';
+        }
+        $this->modalPurificatorNou = true;
+    }
+
+    public function inchideModalPurificator(): void
+    {
+        $this->modalPurificatorNou = false;
+        $this->resetFormPurificator();
+    }
+
+    public function salveazaPurificator(): void
+    {
+        $this->validate([
+            'purificatorIdProdus'       => ['required', 'exists:cost_products,id'],
+            'purificatorSerie'          => ['nullable', 'string', 'max:100'],
+            'purificatorTranzactie'     => ['required', 'in:custodie,cumparat'],
+            'purificatorDataInstalare'  => ['required', 'date'],
+            'purificatorDataMentenanta' => ['nullable', 'date'],
+            'purificatorGarantie'       => ['required', 'numeric', 'min:0'],
+            'purificatorObservatii'     => ['nullable', 'string'],
+        ], [
+            'purificatorIdProdus.required'      => 'Selecteaza produsul.',
+            'purificatorDataInstalare.required' => 'Data instalarii este obligatorie.',
+        ]);
+
+        $payload = [
+            'id_client'                 => $this->client->id,
+            'id_adresa'                 => $this->abonamentAdresaId,
+            'id_produs'                 => $this->purificatorIdProdus,
+            'serie'                     => $this->purificatorSerie ?: null,
+            'tranzactie'                => $this->purificatorTranzactie,
+            'data_instalare'            => $this->purificatorDataInstalare,
+            'data_urmatoare_mentenanta' => $this->purificatorDataMentenanta ?: null,
+            'status'                    => DozatorFiltre::STATUS_ACTIV,
+            'suma_garantie'             => $this->purificatorGarantie,
+            'observatii'                => $this->purificatorObservatii ?: null,
+        ];
+
+        if ($this->purificatorEditId) {
+            DozatorFiltre::where('id_client', $this->client->id)
+                ->where('id', $this->purificatorEditId)
+                ->update($payload);
+        } else {
+            DozatorFiltre::create($payload);
+        }
+
+        $this->inchideModalPurificator();
+    }
+
+    public function stergePurificator(int $id): void
+    {
+        $pf = DozatorFiltre::where('id_client', $this->client->id)->findOrFail($id);
+        $pf->update([
+            'status' => $pf->esteActiv() ? DozatorFiltre::STATUS_RETRAS : DozatorFiltre::STATUS_ACTIV,
+        ]);
+    }
+
+    private function resetFormPurificator(): void
+    {
+        $this->purificatorEditId        = null;
+        $this->purificatorIdProdus      = null;
+        $this->purificatorSerie         = '';
+        $this->purificatorTranzactie    = 'custodie';
+        $this->purificatorDataInstalare = now()->toDateString();
+        $this->purificatorDataMentenanta = now()->addMonths(12)->toDateString();
+        $this->purificatorGarantie      = '0.00';
+        $this->purificatorObservatii    = '';
+        $this->resetErrorBag();
+    }
+
+    // ===== Vizite (Dozatoare cu bidoane — igienizari) =====
+
+    public function marcheazaIgienizareAzi(int $id): void
+    {
+        $d = Dozator::where('id_client', $this->client->id)->findOrFail($id);
+        DB::transaction(function () use ($d) {
+            Vizita::create([
+                'id_dozator'     => $d->id,
+                'id_client'      => $d->id_client,
+                'id_adresa'      => $d->id_adresa,
+                'id_masina'      => $d->id_masina,
+                'data_vizita'    => now()->toDateString(),
+                'data_urmatoare' => now()->addMonths(6)->toDateString(),
+                'pret'           => 0,
+                'livrat'         => true,
+                'achitat'        => false,
+            ]);
+            $d->update(['perioada_igenizare' => now()->addMonths(6)->toDateString()]);
+        });
+        session()->flash('mesaj', 'Igienizare inregistrata. Urmatoarea: ' . now()->addMonths(6)->format('d.m.Y'));
+    }
+
+    public function deschideModalVizite(int $id): void
+    {
+        $d = Dozator::where('id_client', $this->client->id)->findOrFail($id);
+        $this->viziteForDozatorId = $d->id;
+        $this->vizDataVizita      = now()->toDateString();
+        $this->vizDataUrmatoare   = now()->addMonths(6)->toDateString();
+        $this->vizPret            = '';
+        $this->vizObservatii      = '';
+        $this->modalVizite        = true;
+    }
+
+    public function inchideModalVizite(): void
+    {
+        $this->modalVizite        = false;
+        $this->viziteForDozatorId = null;
+        $this->vizDataVizita      = '';
+        $this->vizDataUrmatoare   = '';
+        $this->vizPret            = '';
+        $this->vizObservatii      = '';
+        $this->resetErrorBag();
+    }
+
+    public function adaugaVizita(): void
+    {
+        $this->validate([
+            'vizDataVizita'    => ['required', 'date'],
+            'vizDataUrmatoare' => ['nullable', 'date', 'after_or_equal:vizDataVizita'],
+            'vizPret'          => ['nullable', 'numeric', 'min:0'],
+            'vizObservatii'    => ['nullable', 'string'],
+        ], [
+            'vizDataVizita.required'          => 'Data vizitei este obligatorie.',
+            'vizDataUrmatoare.after_or_equal' => 'Data urmatoarei igienizari trebuie sa fie >= data vizitei.',
+        ]);
+
+        $d = Dozator::where('id_client', $this->client->id)->findOrFail($this->viziteForDozatorId);
+
+        DB::transaction(function () use ($d) {
+            Vizita::create([
+                'id_dozator'     => $d->id,
+                'id_client'      => $d->id_client,
+                'id_adresa'      => $d->id_adresa,
+                'id_masina'      => $d->id_masina,
+                'data_vizita'    => $this->vizDataVizita,
+                'data_urmatoare' => $this->vizDataUrmatoare ?: null,
+                'pret'           => $this->vizPret !== '' ? (float) $this->vizPret : 0,
+                'observatii'     => $this->vizObservatii ?: null,
+                'livrat'         => true,
+                'achitat'        => false,
+            ]);
+            if ($this->vizDataUrmatoare) {
+                $d->update(['perioada_igenizare' => $this->vizDataUrmatoare]);
+            }
+        });
+
+        session()->flash('mesaj', 'Vizita inregistrata. Perioada urmatoare actualizata.');
+        $this->inchideModalVizite();
+    }
+
+    // ===== Interventii (Dozatoare cu filtre — mentenanta) =====
+
+    public function marcheazaInterventieAzi(int $id): void
+    {
+        $d = DozatorFiltre::where('id_client', $this->client->id)->findOrFail($id);
+        DB::transaction(function () use ($d) {
+            DozatorFiltreIstoric::create([
+                'id_dozator_filtre' => $d->id,
+                'id_client'         => $d->id_client,
+                'id_masina'         => $d->id_masina,
+                'data_interventie'  => now()->toDateString(),
+                'data_urmatoare'    => now()->addMonths(12)->toDateString(),
+                'pret'              => 0,
+            ]);
+            $d->update([
+                'data_ultima_mentenanta'    => now()->toDateString(),
+                'data_urmatoare_mentenanta' => now()->addMonths(12)->toDateString(),
+            ]);
+        });
+        session()->flash('mesaj', 'Interventie inregistrata. Urmatoarea: ' . now()->addMonths(12)->format('d.m.Y'));
+    }
+
+    public function deschideModalInterventie(int $id): void
+    {
+        $d = DozatorFiltre::where('id_client', $this->client->id)->findOrFail($id);
+        $this->interventieForFiltruId = $d->id;
+        $this->intDataInterventie     = now()->toDateString();
+        $this->intDataUrmatoare       = now()->addMonths(12)->toDateString();
+        $this->intPret                = '';
+        $this->intObservatii          = '';
+        $this->modalInterventie       = true;
+    }
+
+    public function inchideModalInterventie(): void
+    {
+        $this->modalInterventie       = false;
+        $this->interventieForFiltruId = null;
+        $this->intDataInterventie     = '';
+        $this->intDataUrmatoare       = '';
+        $this->intPret                = '';
+        $this->intObservatii          = '';
+        $this->resetErrorBag();
+    }
+
+    public function adaugaInterventie(): void
+    {
+        $this->validate([
+            'intDataInterventie' => ['required', 'date'],
+            'intDataUrmatoare'   => ['nullable', 'date', 'after_or_equal:intDataInterventie'],
+            'intPret'            => ['nullable', 'numeric', 'min:0'],
+            'intObservatii'      => ['nullable', 'string'],
+        ], [
+            'intDataInterventie.required'          => 'Data interventiei este obligatorie.',
+            'intDataUrmatoare.after_or_equal'      => 'Data urmatoarei mentenante trebuie sa fie >= data interventiei.',
+        ]);
+
+        $d = DozatorFiltre::where('id_client', $this->client->id)->findOrFail($this->interventieForFiltruId);
+
+        DB::transaction(function () use ($d) {
+            DozatorFiltreIstoric::create([
+                'id_dozator_filtre' => $d->id,
+                'id_client'         => $d->id_client,
+                'id_masina'         => $d->id_masina,
+                'data_interventie'  => $this->intDataInterventie,
+                'data_urmatoare'    => $this->intDataUrmatoare ?: null,
+                'pret'              => $this->intPret !== '' ? (float) $this->intPret : 0,
+                'observatii'        => $this->intObservatii ?: null,
+            ]);
+            $update = ['data_ultima_mentenanta' => $this->intDataInterventie];
+            if ($this->intDataUrmatoare) {
+                $update['data_urmatoare_mentenanta'] = $this->intDataUrmatoare;
+            }
+            $d->update($update);
+        });
+
+        session()->flash('mesaj', 'Interventie inregistrata. Datele de mentenanta actualizate.');
+        $this->inchideModalInterventie();
     }
 
     // ===== Recipienti — administrare admin (corectie manuala + jurnal) =====
@@ -644,11 +1030,27 @@ class Detalii extends Component
             ->limit(100)
             ->get();
 
+        // Vizite / Interventii — incarcate la cerere (cand modalul e deschis)
+        $viziteList = $this->viziteForDozatorId
+            ? Vizita::where('id_dozator', $this->viziteForDozatorId)
+                ->orderByDesc('data_vizita')
+                ->limit(20)
+                ->get()
+            : collect();
+
+        $interventiiList = $this->interventieForFiltruId
+            ? DozatorFiltreIstoric::where('id_dozator_filtre', $this->interventieForFiltruId)
+                ->orderByDesc('data_interventie')
+                ->limit(20)
+                ->get()
+            : collect();
+
         return view('livewire.clienti.detalii', [
             'adrese' => $adrese,
             'numarAdrese' => $adrese->count(),
             'masiniDisponibile' => Car::where('activ', true)->orderBy('denumire')->get(),
             'depoziteDisponibile' => Deposit::where('activ', true)->orderBy('denumire')->get(),
+            'produseCatalog' => CostProduct::where('activ', true)->orderBy('denumire')->get(),
             'probleme' => $problemeClient,
             'numarProbleme' => $problemeClient->count(),
             'dozatoare' => $dozatoareClient,
@@ -659,6 +1061,8 @@ class Detalii extends Component
             'totalSold19l' => $totalSold19l,
             'totalSold11l' => $totalSold11l,
             'jurnalRecipienti' => $jurnalRecipienti,
+            'viziteList' => $viziteList,
+            'interventiiList' => $interventiiList,
         ]);
     }
 }

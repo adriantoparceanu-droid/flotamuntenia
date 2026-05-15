@@ -44,6 +44,7 @@
                             <tr>
                                 <th class="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Denumire</th>
                                 <th class="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Adresa</th>
+                                <th class="px-4 py-2 text-center font-medium text-gray-600 dark:text-gray-300">Implicit</th>
                                 <th class="px-4 py-2 text-center font-medium text-gray-600 dark:text-gray-300">Stare</th>
                                 <th class="px-4 py-2 text-right font-medium text-gray-600 dark:text-gray-300">Actiuni</th>
                             </tr>
@@ -53,6 +54,21 @@
                                 <tr>
                                     <td class="px-4 py-2 text-gray-900 dark:text-gray-100 font-medium">{{ $d->denumire }}</td>
                                     <td class="px-4 py-2 text-gray-700 dark:text-gray-300">{{ $d->adresa ?: '—' }}</td>
+                                    <td class="px-4 py-2 text-center">
+                                        @if($d->implicit)
+                                            <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
+                                                <x-heroicon-s-star class="w-3.5 h-3.5" />
+                                                Implicit
+                                            </span>
+                                        @else
+                                            <button wire:click="setaImplicit({{ $d->id }})"
+                                                    wire:confirm="Setezi '{{ $d->denumire }}' ca depozit implicit?"
+                                                    class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500 hover:bg-indigo-50 hover:text-indigo-600">
+                                                <x-heroicon-o-star class="w-3.5 h-3.5" />
+                                                Seteaza implicit
+                                            </button>
+                                        @endif
+                                    </td>
                                     <td class="px-4 py-2 text-center">
                                         <button wire:click="comutaActiv({{ $d->id }})"
                                                 class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium {{ $d->activ ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-gray-200 text-gray-700 hover:bg-gray-300' }}">
@@ -75,7 +91,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="4" class="px-4 py-12 text-center text-gray-500 dark:text-gray-400">
+                                    <td colspan="5" class="px-4 py-12 text-center text-gray-500 dark:text-gray-400">
                                         <x-heroicon-o-inbox class="w-12 h-12 mx-auto mb-2 text-gray-300" />
                                         Niciun depozit.
                                     </td>

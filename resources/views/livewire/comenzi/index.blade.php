@@ -137,7 +137,7 @@
                                             {{ $c->client?->denumire ?? '—' }}
                                         </a>
                                         @if($c->adresa)
-                                            <span class="text-xs text-gray-500 block">{{ $c->adresa->denumire }}</span>
+                                            <span class="text-xs text-gray-500 block">{{ $c->adresa->eticheta }}</span>
                                         @endif
                                     </td>
                                     <td class="px-3 py-2">

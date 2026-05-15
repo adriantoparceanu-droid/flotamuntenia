@@ -104,14 +104,7 @@
                             Probleme
                             <span class="ml-1 px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 text-xs">{{ $numarProbleme }}</span>
                         </button>
-                        <button wire:click="comutaTab('dozatoare')" class="{{ $tabClasses('dozatoare') }}">
-                            <x-heroicon-o-wrench-screwdriver class="w-4 h-4" />
-                            Dozatoare
-                            <span class="ml-1 px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs"
-                                  title="Bidoane: {{ $numarDozatoare }} / Filtre: {{ $numarFiltre }}">
-                                {{ $numarDozatoare + $numarFiltre }}
-                            </span>
-                        </button>
+
                         <button wire:click="comutaTab('recipienti')" class="{{ $tabClasses('recipienti') }}">
                             <x-heroicon-o-archive-box class="w-4 h-4" />
                             Recipienti
@@ -259,7 +252,7 @@
                                         <div class="flex items-start justify-between gap-4">
                                             <div class="flex-1 min-w-0">
                                                 <div class="flex items-center gap-2 mb-1 flex-wrap">
-                                                    <h4 class="font-medium text-gray-900 dark:text-gray-100">{{ $a->denumire }}</h4>
+                                                    <h4 class="font-medium text-gray-900 dark:text-gray-100">{{ $a->eticheta }}</h4>
                                                     @if($a->activ)
                                                         <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">
                                                             <x-heroicon-s-check-circle class="w-3 h-3" /> Activa
@@ -390,6 +383,190 @@
                                                 </div>
                                             @endif
                                         </div>
+
+                                        {{-- Dozatoare / Purificatoare inline per adresa --}}
+                                        @php
+                                            $aparateAdresaInline = $dozatoare->where('id_adresa', $a->id);
+                                            $purificatoareAdresaInline = $dozatoareFiltre->where('id_adresa', $a->id);
+                                            $tipAdresaInline = $a->produs?->abonament;
+                                            $areAparate = $aparateAdresaInline->isNotEmpty() || $tipAdresaInline === Produs::TIP_ABONAMENT;
+                                            $arePurificatoare = $purificatoareAdresaInline->isNotEmpty() || $tipAdresaInline === Produs::TIP_FILTRE;
+                                        @endphp
+                                        @if($areAparate || $arePurificatoare)
+                                            <div class="mt-3 pt-3 border-t border-dashed border-gray-200 dark:border-gray-700 space-y-3">
+
+                                                {{-- Aparate cu bidoane --}}
+                                                @if($areAparate)
+                                                    <div>
+                                                        <div class="flex items-center justify-between mb-1.5">
+                                                            <h5 class="text-xs font-semibold text-indigo-700 dark:text-indigo-400 flex items-center gap-1">
+                                                                <x-heroicon-o-cube class="w-3.5 h-3.5" />
+                                                                Aparate instalate
+                                                                @if($aparateAdresaInline->isNotEmpty())
+                                                                    <span class="font-normal text-gray-400">({{ $aparateAdresaInline->count() }})</span>
+                                                                @endif
+                                                            </h5>
+                                                            <button type="button" wire:click="deschideModalAparat(null, {{ $a->id }})"
+                                                                    class="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800">
+                                                                <x-heroicon-m-plus class="w-3 h-3" /> Adauga
+                                                            </button>
+                                                        </div>
+                                                        @if($aparateAdresaInline->isEmpty())
+                                                            <p class="text-xs text-gray-400 italic">Niciun aparat inregistrat.</p>
+                                                        @else
+                                                            <div class="overflow-x-auto rounded border border-gray-100 dark:border-gray-700">
+                                                                <table class="min-w-full text-xs divide-y divide-gray-100 dark:divide-gray-700">
+                                                                    <thead class="bg-gray-50 dark:bg-gray-700/50 text-[11px] text-gray-500 uppercase tracking-wide">
+                                                                        <tr>
+                                                                            <th class="px-2 py-1.5 text-left">Produs</th>
+                                                                            <th class="px-2 py-1.5 text-left">Marca / Serie</th>
+                                                                            <th class="px-2 py-1.5 text-left">Instalat</th>
+                                                                            <th class="px-2 py-1.5 text-left">Igienizare</th>
+                                                                            <th class="px-2 py-1.5 text-right">Actiuni</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody class="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-800">
+                                                                        @foreach($aparateAdresaInline as $ap)
+                                                                            <tr class="{{ ! $ap->activ ? 'opacity-50' : '' }}">
+                                                                                <td class="px-2 py-1.5 text-gray-700 dark:text-gray-300">{{ $ap->produs?->denumire ?? '—' }}</td>
+                                                                                <td class="px-2 py-1.5 font-mono text-gray-600">{{ $ap->serie ?: '—' }}</td>
+                                                                                <td class="px-2 py-1.5 whitespace-nowrap text-gray-600">{{ $ap->data_instalare?->format('d.m.Y') ?? '—' }}</td>
+                                                                                <td class="px-2 py-1.5">
+                                                                                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] {{ $ap->culoareStatusIgienizare() }}">
+                                                                                        {{ $ap->etichetaStatusIgienizare() }}
+                                                                                    </span>
+                                                                                    @if($ap->perioada_igenizare)
+                                                                                        <span class="block text-[10px] text-gray-400">{{ $ap->perioada_igenizare->format('d.m.Y') }}</span>
+                                                                                    @endif
+                                                                                </td>
+                                                                                <td class="px-2 py-1.5 text-right whitespace-nowrap">
+                                                                                    <div class="inline-flex items-center gap-0.5">
+                                                                                        @if($ap->activ)
+                                                                                            <button type="button"
+                                                                                                    wire:click="marcheazaIgienizareAzi({{ $ap->id }})"
+                                                                                                    wire:confirm="Inregistrezi igienizare azi pentru '{{ addslashes($ap->produs?->denumire ?? 'aparat') }}'? Urmatoarea = +6 luni."
+                                                                                                    title="Marcheaza igienizare azi"
+                                                                                                    class="text-emerald-600 hover:text-emerald-800 p-1 rounded hover:bg-emerald-50">
+                                                                                                <x-heroicon-m-check class="w-3.5 h-3.5" />
+                                                                                            </button>
+                                                                                            <button type="button"
+                                                                                                    wire:click="deschideModalVizite({{ $ap->id }})"
+                                                                                                    title="Vizite / Igienizari ({{ $ap->vizite_count ?? 0 }})"
+                                                                                                    class="text-indigo-500 hover:text-indigo-700 p-1 rounded hover:bg-indigo-50">
+                                                                                                <x-heroicon-o-clipboard-document-list class="w-3.5 h-3.5" />
+                                                                                            </button>
+                                                                                        @endif
+                                                                                        <button type="button"
+                                                                                                wire:click="deschideModalAparat({{ $ap->id }}, {{ $a->id }})"
+                                                                                                title="Editeaza"
+                                                                                                class="text-gray-500 hover:text-gray-700 p-1 rounded hover:bg-gray-50">
+                                                                                            <x-heroicon-m-pencil-square class="w-3.5 h-3.5" />
+                                                                                        </button>
+                                                                                        <button type="button"
+                                                                                                wire:click="stergeAparat({{ $ap->id }})"
+                                                                                                wire:confirm="{{ $ap->activ ? 'Dezactivezi aparatul?' : 'Reactivezi aparatul?' }}"
+                                                                                                title="{{ $ap->activ ? 'Dezactiveaza' : 'Reactiveaza' }}"
+                                                                                                class="{{ $ap->activ ? 'text-red-400 hover:text-red-600 hover:bg-red-50' : 'text-green-500 hover:text-green-700 hover:bg-green-50' }} p-1 rounded">
+                                                                                            <x-heroicon-m-arrow-uturn-left class="w-3.5 h-3.5" />
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </td>
+                                                                            </tr>
+                                                                        @endforeach
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                        @endif
+                                                    </div>
+                                                @endif
+
+                                                {{-- Purificatoare cu filtre --}}
+                                                @if($arePurificatoare)
+                                                    <div>
+                                                        <div class="flex items-center justify-between mb-1.5">
+                                                            <h5 class="text-xs font-semibold text-cyan-700 dark:text-cyan-400 flex items-center gap-1">
+                                                                <x-heroicon-o-funnel class="w-3.5 h-3.5" />
+                                                                Purificatoare instalate
+                                                                @if($purificatoareAdresaInline->isNotEmpty())
+                                                                    <span class="font-normal text-gray-400">({{ $purificatoareAdresaInline->count() }})</span>
+                                                                @endif
+                                                            </h5>
+                                                            <button type="button" wire:click="deschideModalPurificator(null, {{ $a->id }})"
+                                                                    class="inline-flex items-center gap-1 text-xs text-cyan-600 hover:text-cyan-800">
+                                                                <x-heroicon-m-plus class="w-3 h-3" /> Adauga
+                                                            </button>
+                                                        </div>
+                                                        @if($purificatoareAdresaInline->isEmpty())
+                                                            <p class="text-xs text-gray-400 italic">Niciun purificator inregistrat.</p>
+                                                        @else
+                                                            <div class="overflow-x-auto rounded border border-gray-100 dark:border-gray-700">
+                                                                <table class="min-w-full text-xs divide-y divide-gray-100 dark:divide-gray-700">
+                                                                    <thead class="bg-gray-50 dark:bg-gray-700/50 text-[11px] text-gray-500 uppercase tracking-wide">
+                                                                        <tr>
+                                                                            <th class="px-2 py-1.5 text-left">Produs</th>
+                                                                            <th class="px-2 py-1.5 text-left">Marca / Serie</th>
+                                                                            <th class="px-2 py-1.5 text-left">Instalat</th>
+                                                                            <th class="px-2 py-1.5 text-left">Mentenanta</th>
+                                                                            <th class="px-2 py-1.5 text-right">Actiuni</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody class="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-800">
+                                                                        @foreach($purificatoareAdresaInline as $pf)
+                                                                            <tr class="{{ ! $pf->esteActiv() ? 'opacity-50' : '' }}">
+                                                                                <td class="px-2 py-1.5 text-gray-700 dark:text-gray-300">{{ $pf->produs?->denumire ?? '—' }}</td>
+                                                                                <td class="px-2 py-1.5 font-mono text-gray-600">{{ $pf->serie ?: '—' }}</td>
+                                                                                <td class="px-2 py-1.5 whitespace-nowrap text-gray-600">{{ $pf->data_instalare?->format('d.m.Y') ?? '—' }}</td>
+                                                                                <td class="px-2 py-1.5">
+                                                                                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] {{ $pf->culoareStatusMentenanta() }}">
+                                                                                        {{ $pf->etichetaStatusMentenanta() }}
+                                                                                    </span>
+                                                                                    @if($pf->data_urmatoare_mentenanta)
+                                                                                        <span class="block text-[10px] text-gray-400">{{ $pf->data_urmatoare_mentenanta->format('d.m.Y') }}</span>
+                                                                                    @endif
+                                                                                </td>
+                                                                                <td class="px-2 py-1.5 text-right whitespace-nowrap">
+                                                                                    <div class="inline-flex items-center gap-0.5">
+                                                                                        @if($pf->esteActiv())
+                                                                                            <button type="button"
+                                                                                                    wire:click="marcheazaInterventieAzi({{ $pf->id }})"
+                                                                                                    wire:confirm="Inregistrezi interventie azi pentru '{{ addslashes($pf->produs?->denumire ?? 'purificator') }}'? Urmatoarea = +12 luni."
+                                                                                                    title="Marcheaza interventie azi"
+                                                                                                    class="text-emerald-600 hover:text-emerald-800 p-1 rounded hover:bg-emerald-50">
+                                                                                                <x-heroicon-m-check class="w-3.5 h-3.5" />
+                                                                                            </button>
+                                                                                            <button type="button"
+                                                                                                    wire:click="deschideModalInterventie({{ $pf->id }})"
+                                                                                                    title="Interventii / Mentenanta ({{ $pf->istoric_count ?? 0 }})"
+                                                                                                    class="text-cyan-500 hover:text-cyan-700 p-1 rounded hover:bg-cyan-50">
+                                                                                                <x-heroicon-o-clipboard-document-list class="w-3.5 h-3.5" />
+                                                                                            </button>
+                                                                                        @endif
+                                                                                        <button type="button"
+                                                                                                wire:click="deschideModalPurificator({{ $pf->id }}, {{ $a->id }})"
+                                                                                                title="Editeaza"
+                                                                                                class="text-gray-500 hover:text-gray-700 p-1 rounded hover:bg-gray-50">
+                                                                                            <x-heroicon-m-pencil-square class="w-3.5 h-3.5" />
+                                                                                        </button>
+                                                                                        <button type="button"
+                                                                                                wire:click="stergePurificator({{ $pf->id }})"
+                                                                                                wire:confirm="{{ $pf->esteActiv() ? 'Retragi purificatorul?' : 'Reactivezi purificatorul?' }}"
+                                                                                                title="{{ $pf->esteActiv() ? 'Retrage' : 'Reactiveaza' }}"
+                                                                                                class="{{ $pf->esteActiv() ? 'text-red-400 hover:text-red-600 hover:bg-red-50' : 'text-green-500 hover:text-green-700 hover:bg-green-50' }} p-1 rounded">
+                                                                                            <x-heroicon-m-arrow-uturn-left class="w-3.5 h-3.5" />
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </td>
+                                                                            </tr>
+                                                                        @endforeach
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                        @endif
+                                                    </div>
+                                                @endif
+
+                                            </div>
+                                        @endif
                                     </div>
                                 @endforeach
                             </div>
@@ -439,7 +616,7 @@
                                                             <span class="text-[10px] text-gray-500 block">{{ $p->interval_livrare }}</span>
                                                         @endif
                                                     </td>
-                                                    <td class="px-3 py-2 text-xs text-gray-700 dark:text-gray-300">{{ $p->adresa?->denumire ?? '—' }}</td>
+                                                    <td class="px-3 py-2 text-xs text-gray-700 dark:text-gray-300">{{ $p->adresa?->eticheta ?? '—' }}</td>
                                                     <td class="px-3 py-2 text-xs text-gray-700 dark:text-gray-300 max-w-md">
                                                         <div class="line-clamp-2" title="{{ $p->descriere }}">{{ $p->descriere }}</div>
                                                     </td>
@@ -488,158 +665,6 @@
                                     </table>
                                 </div>
                             @endif
-                        </div>
-                    @endif
-
-                    {{-- Tab Dozatoare (Faza 4.1 + 4.3) - doua sectiuni --}}
-                    @if($tab === 'dozatoare')
-                        <div class="space-y-8">
-                            {{-- Sectiunea Bidoane --}}
-                            <div class="space-y-4">
-                                <div class="flex items-center justify-between">
-                                    <div class="flex items-center gap-2">
-                                        <x-heroicon-o-cube class="w-5 h-5 text-indigo-600" />
-                                        <h3 class="font-medium text-gray-800 dark:text-gray-200">Dozatoare cu bidoane</h3>
-                                        <span class="text-xs text-gray-500">{{ $dozatoare->count() }} inregistrari</span>
-                                    </div>
-                                    <a href="{{ route('dozatoare.index', ['id_client' => $client->id, 'tip' => 'bidoane', 'new' => 1]) }}" wire:navigate
-                                       class="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded">
-                                        <x-heroicon-m-plus class="w-3.5 h-3.5" />
-                                        Adauga dozator
-                                    </a>
-                                </div>
-
-                                @if($dozatoare->isEmpty())
-                                    <div class="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900 rounded">
-                                        <x-heroicon-o-cube class="w-10 h-10 mx-auto mb-2 text-gray-300" />
-                                        <p class="text-sm">Niciun dozator cu bidoane inregistrat la acest client.</p>
-                                    </div>
-                                @else
-                                    <div class="overflow-x-auto">
-                                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-                                            <thead class="bg-gray-50 dark:bg-gray-900">
-                                                <tr>
-                                                    <th class="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Tip</th>
-                                                    <th class="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Adresa</th>
-                                                    <th class="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Serie</th>
-                                                    <th class="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Tranzactie</th>
-                                                    <th class="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Instalat</th>
-                                                    <th class="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Igienizare</th>
-                                                    <th class="px-3 py-2 text-right font-medium text-gray-600 dark:text-gray-300">Actiuni</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                                                @foreach($dozatoare as $d)
-                                                    <tr class="{{ ! $d->activ ? 'opacity-60' : '' }}">
-                                                        <td class="px-3 py-2 text-gray-700 dark:text-gray-300 text-xs">{{ $d->produs?->denumire ?? '—' }}</td>
-                                                        <td class="px-3 py-2 text-gray-700 dark:text-gray-300 text-xs">{{ $d->adresa?->denumire ?? '—' }}</td>
-                                                        <td class="px-3 py-2 text-gray-700 dark:text-gray-300 font-mono text-xs">{{ $d->serie ?: '—' }}</td>
-                                                        <td class="px-3 py-2">
-                                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs {{ $d->tranzactie === DozatorModel::TRANZACTIE_CUMPARAT ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700' }}">
-                                                                {{ $d->etichetaTranzactie() }}
-                                                            </span>
-                                                        </td>
-                                                        <td class="px-3 py-2 text-gray-700 dark:text-gray-300 text-xs whitespace-nowrap">{{ $d->data_instalare?->format('d.m.Y') ?? '—' }}</td>
-                                                        <td class="px-3 py-2">
-                                                            <div class="flex flex-col items-start gap-0.5">
-                                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs {{ $d->culoareStatusIgienizare() }}">
-                                                                    {{ $d->etichetaStatusIgienizare() }}
-                                                                </span>
-                                                                @if($d->perioada_igenizare)
-                                                                    <span class="text-[11px] text-gray-500">{{ $d->perioada_igenizare->format('d.m.Y') }}</span>
-                                                                @endif
-                                                            </div>
-                                                        </td>
-                                                        <td class="px-3 py-2 text-right whitespace-nowrap">
-                                                            <a href="{{ route('dozatoare.index', ['tip' => 'bidoane', 'edit' => $d->id]) }}" wire:navigate
-                                                               class="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800">
-                                                                <x-heroicon-m-pencil-square class="w-3.5 h-3.5" />
-                                                                Editeaza
-                                                            </a>
-                                                        </td>
-                                                    </tr>
-                                                @endforeach
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                @endif
-                            </div>
-
-                            {{-- Sectiunea Filtre (Faza 4.3) --}}
-                            <div class="space-y-4">
-                                <div class="flex items-center justify-between">
-                                    <div class="flex items-center gap-2">
-                                        <x-heroicon-o-funnel class="w-5 h-5 text-indigo-600" />
-                                        <h3 class="font-medium text-gray-800 dark:text-gray-200">Dozatoare cu filtre</h3>
-                                        <span class="text-xs text-gray-500">{{ $dozatoareFiltre->count() }} inregistrari</span>
-                                    </div>
-                                    <a href="{{ route('dozatoare.index', ['id_client' => $client->id, 'tip' => 'filtre', 'new' => 1]) }}" wire:navigate
-                                       class="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded">
-                                        <x-heroicon-m-plus class="w-3.5 h-3.5" />
-                                        Adauga dozator filtru
-                                    </a>
-                                </div>
-
-                                @if($dozatoareFiltre->isEmpty())
-                                    <div class="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900 rounded">
-                                        <x-heroicon-o-funnel class="w-10 h-10 mx-auto mb-2 text-gray-300" />
-                                        <p class="text-sm">Niciun dozator cu filtre inregistrat la acest client.</p>
-                                    </div>
-                                @else
-                                    <div class="overflow-x-auto">
-                                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-                                            <thead class="bg-gray-50 dark:bg-gray-900">
-                                                <tr>
-                                                    <th class="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Tip</th>
-                                                    <th class="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Adresa</th>
-                                                    <th class="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Serie</th>
-                                                    <th class="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Tranzactie</th>
-                                                    <th class="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Instalat</th>
-                                                    <th class="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Mentenanta</th>
-                                                    <th class="px-3 py-2 text-right font-medium text-gray-600 dark:text-gray-300">Actiuni</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                                                @foreach($dozatoareFiltre as $df)
-                                                    <tr class="{{ ! $df->esteActiv() ? 'opacity-60' : '' }}">
-                                                        <td class="px-3 py-2 text-gray-700 dark:text-gray-300 text-xs">
-                                                            {{ $df->produs?->denumire ?? '—' }}
-                                                            @if((float) $df->suma_garantie > 0)
-                                                                <span class="block text-[10px] text-gray-400">Garantie: {{ number_format((float) $df->suma_garantie, 2, ',', '.') }} lei</span>
-                                                            @endif
-                                                        </td>
-                                                        <td class="px-3 py-2 text-gray-700 dark:text-gray-300 text-xs">{{ $df->adresa?->denumire ?? '—' }}</td>
-                                                        <td class="px-3 py-2 text-gray-700 dark:text-gray-300 font-mono text-xs">{{ $df->serie ?: '—' }}</td>
-                                                        <td class="px-3 py-2">
-                                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs {{ $df->tranzactie === DozatorFiltreModel::TRANZACTIE_CUMPARAT ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700' }}">
-                                                                {{ $df->etichetaTranzactie() }}
-                                                            </span>
-                                                        </td>
-                                                        <td class="px-3 py-2 text-gray-700 dark:text-gray-300 text-xs whitespace-nowrap">{{ $df->data_instalare?->format('d.m.Y') ?? '—' }}</td>
-                                                        <td class="px-3 py-2">
-                                                            <div class="flex flex-col items-start gap-0.5">
-                                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs {{ $df->culoareStatusMentenanta() }}">
-                                                                    {{ $df->etichetaStatusMentenanta() }}
-                                                                </span>
-                                                                @if($df->data_urmatoare_mentenanta)
-                                                                    <span class="text-[11px] text-gray-500">{{ $df->data_urmatoare_mentenanta->format('d.m.Y') }}</span>
-                                                                @endif
-                                                            </div>
-                                                        </td>
-                                                        <td class="px-3 py-2 text-right whitespace-nowrap">
-                                                            <a href="{{ route('dozatoare.index', ['tip' => 'filtre', 'edit' => $df->id]) }}" wire:navigate
-                                                               class="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800">
-                                                                <x-heroicon-m-pencil-square class="w-3.5 h-3.5" />
-                                                                Editeaza
-                                                            </a>
-                                                        </td>
-                                                    </tr>
-                                                @endforeach
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                @endif
-                            </div>
                         </div>
                     @endif
 
@@ -697,7 +722,7 @@
                                         @php $soldA = $solduriRecipienti[$a->id] ?? ['19l' => 0, '11l' => 0]; @endphp
                                         <div class="flex items-center justify-between gap-3 border border-gray-200 dark:border-gray-700 rounded-lg p-3 {{ $recFiltruAdresa === $a->id ? 'ring-2 ring-amber-400' : '' }}">
                                             <div class="flex-1 min-w-0">
-                                                <div class="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">{{ $a->denumire }}</div>
+                                                <div class="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">{{ $a->eticheta }}</div>
                                                 <div class="text-xs text-gray-500 truncate">{{ $a->adresaCompleta() ?: '—' }}</div>
                                             </div>
                                             <div class="flex items-center gap-3 text-sm tabular-nums flex-shrink-0">
@@ -773,7 +798,7 @@
                                                                 {{ $m->data?->format('d.m.Y') }}
                                                             </td>
                                                             <td class="px-3 py-2 text-gray-700 dark:text-gray-300">
-                                                                {{ $m->adresa?->denumire ?? '—' }}
+                                                                {{ $m->adresa?->eticheta ?? '—' }}
                                                             </td>
                                                             <td class="px-3 py-2 text-center tabular-nums">
                                                                 <span class="text-green-700">+{{ $m->lasati }}</span>
@@ -1095,20 +1120,46 @@
                     Configurare livrare
                 </h3>
 
-                {{-- Selector tip (dropdown unic) --}}
-                <div class="mb-4">
+                {{-- Selector nivel 1: Abonament lunar vs Per bucata --}}
+                <div class="mb-3">
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Tip configurare</label>
-                    <select wire:model.live="abTip"
-                            class="block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm">
-                        <option value="{{ Produs::TIP_ABONAMENT }}">Abonament lunar — livrare lunara, cantitate fixa inclusa</option>
-                        <option value="{{ Produs::TIP_PER_BUCATA }}">Per bucata — livrari la cerere, fara abonament</option>
-                        <option value="{{ Produs::TIP_FILTRE }}">Filtre — dozator cu filtre (Faza 4)</option>
-                        <option value="{{ Produs::TIP_APARATE }}">Aparate — dozator in custodie (Faza 4)</option>
-                    </select>
+                    <div class="flex gap-2">
+                        <button type="button"
+                                wire:click="{{ in_array((int)$abTip, [1, 2]) ? '' : '$set(\'abTip\', 1)' }}"
+                                class="{{ in_array((int)$abTip, [1, 2]) ? 'bg-indigo-600 text-white ring-2 ring-indigo-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600' }} px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5">
+                            <x-heroicon-m-calendar-days class="w-4 h-4" />
+                            Abonament lunar
+                        </button>
+                        <button type="button"
+                                wire:click="$set('abTip', {{ Produs::TIP_PER_BUCATA }})"
+                                class="{{ (int)$abTip === Produs::TIP_PER_BUCATA ? 'bg-amber-500 text-white ring-2 ring-amber-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600' }} px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5">
+                            <x-heroicon-m-shopping-bag class="w-4 h-4" />
+                            Per bucata
+                        </button>
+                    </div>
                     @error('abTip') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
                 </div>
 
-                {{-- Campuri specifice tipului 1 (abonament lunar) --}}
+                {{-- Selector nivel 2: Bidoane vs Purificator (vizibil doar pt Abonament lunar) --}}
+                @if(in_array((int)$abTip, [Produs::TIP_ABONAMENT, Produs::TIP_FILTRE]))
+                <div class="mb-4 ml-2 pl-3 border-l-2 border-indigo-200 dark:border-indigo-700">
+                    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Tip abonament</label>
+                    <div class="flex gap-2">
+                        <button type="button"
+                                wire:click="$set('abTip', {{ Produs::TIP_ABONAMENT }})"
+                                class="{{ (int)$abTip === Produs::TIP_ABONAMENT ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-300' : 'bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }} px-3 py-1.5 rounded-md text-sm font-medium transition-colors">
+                            Bidoane
+                        </button>
+                        <button type="button"
+                                wire:click="$set('abTip', {{ Produs::TIP_FILTRE }})"
+                                class="{{ (int)$abTip === Produs::TIP_FILTRE ? 'bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300 ring-1 ring-cyan-300' : 'bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }} px-3 py-1.5 rounded-md text-sm font-medium transition-colors">
+                            Purificator
+                        </button>
+                    </div>
+                </div>
+                @endif
+
+                {{-- Campuri specifice tipului 1 (abonament lunar - bidoane) --}}
                 @if((int)$abTip === Produs::TIP_ABONAMENT)
                     <div class="space-y-4 p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-md border border-indigo-100">
                         <div>
@@ -1224,14 +1275,131 @@
                         </div>
                     </div>
                 @elseif((int)$abTip === Produs::TIP_FILTRE)
-                    <div class="p-3 bg-cyan-50 dark:bg-cyan-900/10 rounded-md border border-cyan-100 text-sm text-cyan-800 dark:text-cyan-200 flex items-start gap-2">
-                        <x-heroicon-o-information-circle class="w-5 h-5 flex-shrink-0 mt-0.5" />
-                        Datele specifice dozatorului cu filtre (serie, data instalarii, schimburi filtre) se vor configura in modulul "Dozatoare cu filtre" (Faza 4).
+                    {{-- Purificator: pret lunar + data prima facturare --}}
+                    <div class="space-y-3 p-4 bg-cyan-50 dark:bg-cyan-900/10 rounded-md border border-cyan-100">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Pret serviciu lunar (lei)</label>
+                            <input type="number" step="0.01" min="0" wire:model="abPret"
+                                   class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                            @error('abPret') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                                <x-heroicon-m-calendar-days class="w-3.5 h-3.5" />
+                                Data primei facturari
+                            </label>
+                            <input type="date" wire:model="abZiLivrare"
+                                   class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                            @error('abZiLivrare') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                        </div>
                     </div>
-                @elseif((int)$abTip === Produs::TIP_APARATE)
-                    <div class="p-3 bg-purple-50 dark:bg-purple-900/10 rounded-md border border-purple-100 text-sm text-purple-800 dark:text-purple-200 flex items-start gap-2">
-                        <x-heroicon-o-information-circle class="w-5 h-5 flex-shrink-0 mt-0.5" />
-                        Aparatul (dozator in custodie) si igienizarile se vor configura in modulul "Dozatoare cu bidoane" (Faza 4).
+                @endif
+
+                {{-- Sectiunea Aparate instalate — vizibila pentru Abonament lunar > Bidoane --}}
+                @if((int)$abTip === Produs::TIP_ABONAMENT && $abonamentAdresaId)
+                    @php $aparateAdresa = $dozatoare->where('id_adresa', $abonamentAdresaId)->where('activ', true); @endphp
+                    <div class="mt-4 border border-gray-200 dark:border-gray-700 rounded-md">
+                        <div class="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700/50 rounded-t-md">
+                            <h4 class="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                                Aparate instalate la aceasta adresa
+                                @if($aparateAdresa->isNotEmpty())
+                                    <span class="ml-1 font-normal text-gray-500">({{ $aparateAdresa->count() }})</span>
+                                @endif
+                            </h4>
+                            <button type="button" wire:click="deschideModalAparat()"
+                                    class="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400">
+                                <x-heroicon-m-plus class="w-3.5 h-3.5" />
+                                Adauga aparat
+                            </button>
+                        </div>
+                        @if($aparateAdresa->isEmpty())
+                            <p class="text-xs text-gray-400 italic px-3 py-2">Niciun aparat inregistrat la aceasta adresa.</p>
+                        @else
+                            <ul class="divide-y divide-gray-100 dark:divide-gray-700">
+                                @foreach($aparateAdresa as $ap)
+                                    <li class="flex items-center justify-between px-3 py-2 text-xs">
+                                        <div class="min-w-0">
+                                            <span class="font-medium text-gray-800 dark:text-gray-200">{{ $ap->produs?->denumire ?? 'Produs necunoscut' }}</span>
+                                            @if($ap->serie)
+                                                <span class="text-gray-500 ml-1">· {{ $ap->serie }}</span>
+                                            @endif
+                                            @if($ap->data_instalare)
+                                                <span class="text-gray-400 ml-1">· {{ $ap->data_instalare->format('d/m/Y') }}</span>
+                                            @endif
+                                            <span class="ml-1 px-1.5 py-0.5 rounded text-[10px] {{ $ap->tranzactie === 'cumparat' ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700' }}">
+                                                {{ $ap->etichetaTranzactie() }}
+                                            </span>
+                                        </div>
+                                        <div class="flex gap-1 ml-2 flex-shrink-0">
+                                            <button type="button" wire:click="deschideModalAparat({{ $ap->id }})"
+                                                    class="text-indigo-500 hover:text-indigo-700 p-0.5">
+                                                <x-heroicon-m-pencil-square class="w-3.5 h-3.5" />
+                                            </button>
+                                            <button type="button"
+                                                    wire:click="stergeAparat({{ $ap->id }})"
+                                                    wire:confirm="Dezactivezi aparatul '{{ addslashes($ap->produs?->denumire ?? 'aparat') }}'?"
+                                                    class="text-red-400 hover:text-red-600 p-0.5">
+                                                <x-heroicon-m-trash class="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @endif
+                    </div>
+                @endif
+
+                {{-- Sectiunea Purificatoare instalate — vizibila pentru Abonament lunar > Purificator --}}
+                @if((int)$abTip === Produs::TIP_FILTRE && $abonamentAdresaId)
+                    @php $purificatoareAdresa = $dozatoareFiltre->where('id_adresa', $abonamentAdresaId)->where('status', 'activ'); @endphp
+                    <div class="mt-4 border border-gray-200 dark:border-gray-700 rounded-md">
+                        <div class="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700/50 rounded-t-md">
+                            <h4 class="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                                Purificatoare instalate la aceasta adresa
+                                @if($purificatoareAdresa->isNotEmpty())
+                                    <span class="ml-1 font-normal text-gray-500">({{ $purificatoareAdresa->count() }})</span>
+                                @endif
+                            </h4>
+                            <button type="button" wire:click="deschideModalPurificator()"
+                                    class="inline-flex items-center gap-1 text-xs font-medium text-cyan-600 hover:text-cyan-800 dark:text-cyan-400">
+                                <x-heroicon-m-plus class="w-3.5 h-3.5" />
+                                Adauga purificator
+                            </button>
+                        </div>
+                        @if($purificatoareAdresa->isEmpty())
+                            <p class="text-xs text-gray-400 italic px-3 py-2">Niciun purificator inregistrat la aceasta adresa.</p>
+                        @else
+                            <ul class="divide-y divide-gray-100 dark:divide-gray-700">
+                                @foreach($purificatoareAdresa as $pf)
+                                    <li class="flex items-center justify-between px-3 py-2 text-xs">
+                                        <div class="min-w-0">
+                                            <span class="font-medium text-gray-800 dark:text-gray-200">{{ $pf->produs?->denumire ?? 'Produs necunoscut' }}</span>
+                                            @if($pf->serie)
+                                                <span class="text-gray-500 ml-1">· {{ $pf->serie }}</span>
+                                            @endif
+                                            @if($pf->data_instalare)
+                                                <span class="text-gray-400 ml-1">· {{ $pf->data_instalare->format('d/m/Y') }}</span>
+                                            @endif
+                                            <span class="ml-1 px-1.5 py-0.5 rounded text-[10px] {{ $pf->tranzactie === 'cumparat' ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700' }}">
+                                                {{ $pf->etichetaTranzactie() }}
+                                            </span>
+                                        </div>
+                                        <div class="flex gap-1 ml-2 flex-shrink-0">
+                                            <button type="button" wire:click="deschideModalPurificator({{ $pf->id }})"
+                                                    class="text-cyan-500 hover:text-cyan-700 p-0.5">
+                                                <x-heroicon-m-pencil-square class="w-3.5 h-3.5" />
+                                            </button>
+                                            <button type="button"
+                                                    wire:click="stergePurificator({{ $pf->id }})"
+                                                    wire:confirm="Dezactivezi purificatorul '{{ addslashes($pf->produs?->denumire ?? 'purificator') }}'?"
+                                                    class="text-red-400 hover:text-red-600 p-0.5">
+                                                <x-heroicon-m-trash class="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @endif
                     </div>
                 @endif
 
@@ -1246,7 +1414,7 @@
                                 class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm">
                             <option value="">— niciuna —</option>
                             @foreach($masiniDisponibile as $m)
-                                <option value="{{ $m->id }}">{{ $m->denumire }} ({{ $m->nr_inmatriculare }})</option>
+                                <option value="{{ $m->id }}" @selected($abIdMasina == $m->id)>{{ $m->denumire }} ({{ $m->nr_inmatriculare }})</option>
                             @endforeach
                         </select>
                         @error('abIdMasina') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
@@ -1260,7 +1428,7 @@
                                 class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm">
                             <option value="">— niciunul —</option>
                             @foreach($depoziteDisponibile as $d)
-                                <option value="{{ $d->id }}">{{ $d->denumire }}</option>
+                                <option value="{{ $d->id }}" @selected($abIdDepozit == $d->id)>{{ $d->denumire }}</option>
                             @endforeach
                         </select>
                         @error('abIdDepozit') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
@@ -1364,6 +1532,372 @@
                             class="inline-flex items-center gap-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-md">
                         <x-heroicon-m-check class="w-4 h-4" />
                         Inregistreaza miscare
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {{-- Sub-modal: Aparat nou / editare aparat (dozator cu bidoane) --}}
+    <div x-data="{ deschis: @entangle('modalAparatNou') }"
+         x-show="deschis"
+         x-on:keydown.escape.window="$wire.inchideModalAparat()"
+         style="display: none;"
+         class="fixed inset-0 z-[60] overflow-y-auto px-4 py-6 sm:px-0">
+        <div x-show="deschis" x-on:click="$wire.inchideModalAparat()"
+             class="fixed inset-0 bg-gray-800 bg-opacity-60"></div>
+
+        <div x-show="deschis"
+             class="relative mb-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl sm:max-w-lg sm:mx-auto">
+            <form wire:submit.prevent="salveazaAparat" class="p-5">
+                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                    <x-heroicon-o-wrench-screwdriver class="w-5 h-5 text-indigo-600" />
+                    {{ $aparatEditId ? 'Editeaza aparat' : 'Aparat nou' }}
+                </h3>
+
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div class="col-span-2">
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Produs <span class="text-red-500">*</span></label>
+                        <select wire:model="aparatIdProdus"
+                                class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm">
+                            <option value="">— Selecteaza —</option>
+                            @foreach($produseCatalog as $prod)
+                                <option value="{{ $prod->id }}" @selected($aparatIdProdus == $prod->id)>{{ $prod->denumire }}</option>
+                            @endforeach
+                        </select>
+                        @error('aparatIdProdus') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Marca dozator</label>
+                        <input type="text" wire:model="aparatSerie" maxlength="100" placeholder="ex: Aqua Pro 500"
+                               class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                        @error('aparatSerie') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Tranzactie <span class="text-red-500">*</span></label>
+                        <select wire:model="aparatTranzactie"
+                                class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm">
+                            <option value="custodie">Custodie (miscare CUSTODIE)</option>
+                            <option value="cumparat">Cumparat (miscare OUT)</option>
+                        </select>
+                        @error('aparatTranzactie') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Data instalare <span class="text-red-500">*</span></label>
+                        <input type="date" wire:model.live="aparatDataInstalare"
+                               class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                        @error('aparatDataInstalare') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Urmatoarea igienizare</label>
+                        <input type="date" wire:model="aparatDataIgienizare"
+                               class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                        <p class="text-[10px] text-gray-400 mt-0.5">Auto-prefill = data instalare + 6 luni</p>
+                        @error('aparatDataIgienizare') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div class="col-span-2">
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Observatii</label>
+                        <textarea wire:model="aparatObservatii" rows="2"
+                                  class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm"></textarea>
+                        @error('aparatObservatii') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" wire:click="inchideModalAparat"
+                            class="inline-flex items-center gap-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm rounded-md">
+                        <x-heroicon-m-x-mark class="w-4 h-4" />
+                        Anuleaza
+                    </button>
+                    <button type="submit"
+                            class="inline-flex items-center gap-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md">
+                        <x-heroicon-m-check class="w-4 h-4" />
+                        Salveaza
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {{-- Modal Vizite (igienizari dozatoare cu bidoane) --}}
+    <div x-data="{ deschis: @entangle('modalVizite') }"
+         x-show="deschis"
+         x-on:keydown.escape.window="$wire.inchideModalVizite()"
+         style="display: none;"
+         class="fixed inset-0 z-[60] overflow-y-auto px-4 py-6 sm:px-0">
+        <div x-show="deschis" x-on:click="$wire.inchideModalVizite()"
+             class="fixed inset-0 bg-gray-800 bg-opacity-60"></div>
+
+        <div x-show="deschis"
+             class="relative mb-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl sm:max-w-xl sm:mx-auto">
+            <div class="p-5">
+                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                    <x-heroicon-o-clipboard-document-list class="w-5 h-5 text-indigo-600" />
+                    Vizite / Igienizari
+                </h3>
+
+                {{-- Lista vizite anterioare --}}
+                @if($viziteList->isNotEmpty())
+                    <div class="mb-4 overflow-x-auto max-h-48 overflow-y-auto border border-gray-100 dark:border-gray-700 rounded">
+                        <table class="min-w-full text-xs divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-900 text-[11px] uppercase tracking-wide text-gray-500 sticky top-0">
+                                <tr>
+                                    <th class="px-3 py-2 text-left">Data</th>
+                                    <th class="px-3 py-2 text-left">Urmatoarea</th>
+                                    <th class="px-3 py-2 text-right">Pret (lei)</th>
+                                    <th class="px-3 py-2 text-left">Observatii</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
+                                @foreach($viziteList as $viz)
+                                    <tr>
+                                        <td class="px-3 py-1.5 whitespace-nowrap text-gray-700">{{ $viz->data_vizita?->format('d.m.Y') ?? '—' }}</td>
+                                        <td class="px-3 py-1.5 whitespace-nowrap text-gray-600">{{ $viz->data_urmatoare?->format('d.m.Y') ?? '—' }}</td>
+                                        <td class="px-3 py-1.5 text-right tabular-nums">{{ number_format((float) $viz->pret, 2, ',', '.') }}</td>
+                                        <td class="px-3 py-1.5 text-gray-500 max-w-xs truncate" title="{{ $viz->observatii }}">{{ $viz->observatii ?: '—' }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @else
+                    <p class="text-sm text-gray-400 italic mb-4">Nicio vizita inregistrata.</p>
+                @endif
+
+                {{-- Formular adaugare vizita noua --}}
+                <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+                    <h4 class="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-3">Adauga vizita noua</h4>
+                    <form wire:submit.prevent="adaugaVizita">
+                        <div class="grid grid-cols-2 gap-3 mb-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Data vizita <span class="text-red-500">*</span></label>
+                                <input type="date" wire:model="vizDataVizita"
+                                       class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                                @error('vizDataVizita') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Urmatoarea igienizare</label>
+                                <input type="date" wire:model="vizDataUrmatoare"
+                                       class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                                @error('vizDataUrmatoare') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Pret (lei)</label>
+                                <input type="number" step="0.01" min="0" wire:model="vizPret"
+                                       class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                                @error('vizPret') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Observatii</label>
+                                <input type="text" wire:model="vizObservatii"
+                                       class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                                @error('vizObservatii') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                            </div>
+                        </div>
+                        <div class="flex justify-end gap-2">
+                            <button type="button" wire:click="inchideModalVizite"
+                                    class="inline-flex items-center gap-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm rounded-md">
+                                <x-heroicon-m-x-mark class="w-4 h-4" />
+                                Inchide
+                            </button>
+                            <button type="submit"
+                                    class="inline-flex items-center gap-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md">
+                                <x-heroicon-m-check class="w-4 h-4" />
+                                Inregistreaza vizita
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Modal Interventii (mentenanta dozatoare cu filtre) --}}
+    <div x-data="{ deschis: @entangle('modalInterventie') }"
+         x-show="deschis"
+         x-on:keydown.escape.window="$wire.inchideModalInterventie()"
+         style="display: none;"
+         class="fixed inset-0 z-[60] overflow-y-auto px-4 py-6 sm:px-0">
+        <div x-show="deschis" x-on:click="$wire.inchideModalInterventie()"
+             class="fixed inset-0 bg-gray-800 bg-opacity-60"></div>
+
+        <div x-show="deschis"
+             class="relative mb-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl sm:max-w-xl sm:mx-auto">
+            <div class="p-5">
+                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                    <x-heroicon-o-clipboard-document-list class="w-5 h-5 text-cyan-600" />
+                    Interventii / Mentenanta
+                </h3>
+
+                {{-- Lista interventii anterioare --}}
+                @if($interventiiList->isNotEmpty())
+                    <div class="mb-4 overflow-x-auto max-h-48 overflow-y-auto border border-gray-100 dark:border-gray-700 rounded">
+                        <table class="min-w-full text-xs divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-900 text-[11px] uppercase tracking-wide text-gray-500 sticky top-0">
+                                <tr>
+                                    <th class="px-3 py-2 text-left">Data</th>
+                                    <th class="px-3 py-2 text-left">Urmatoarea</th>
+                                    <th class="px-3 py-2 text-right">Pret (lei)</th>
+                                    <th class="px-3 py-2 text-left">Observatii</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
+                                @foreach($interventiiList as $int)
+                                    <tr>
+                                        <td class="px-3 py-1.5 whitespace-nowrap text-gray-700">{{ $int->data_interventie?->format('d.m.Y') ?? '—' }}</td>
+                                        <td class="px-3 py-1.5 whitespace-nowrap text-gray-600">{{ $int->data_urmatoare?->format('d.m.Y') ?? '—' }}</td>
+                                        <td class="px-3 py-1.5 text-right tabular-nums">{{ number_format((float) $int->pret, 2, ',', '.') }}</td>
+                                        <td class="px-3 py-1.5 text-gray-500 max-w-xs truncate" title="{{ $int->observatii }}">{{ $int->observatii ?: '—' }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @else
+                    <p class="text-sm text-gray-400 italic mb-4">Nicio interventie inregistrata.</p>
+                @endif
+
+                {{-- Formular adaugare interventie noua --}}
+                <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+                    <h4 class="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-3">Adauga interventie noua</h4>
+                    <form wire:submit.prevent="adaugaInterventie">
+                        <div class="grid grid-cols-2 gap-3 mb-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Data interventie <span class="text-red-500">*</span></label>
+                                <input type="date" wire:model="intDataInterventie"
+                                       class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                                @error('intDataInterventie') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Urmatoarea mentenanta</label>
+                                <input type="date" wire:model="intDataUrmatoare"
+                                       class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                                @error('intDataUrmatoare') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Pret (lei)</label>
+                                <input type="number" step="0.01" min="0" wire:model="intPret"
+                                       class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                                @error('intPret') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Observatii</label>
+                                <input type="text" wire:model="intObservatii"
+                                       class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                                @error('intObservatii') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                            </div>
+                        </div>
+                        <div class="flex justify-end gap-2">
+                            <button type="button" wire:click="inchideModalInterventie"
+                                    class="inline-flex items-center gap-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm rounded-md">
+                                <x-heroicon-m-x-mark class="w-4 h-4" />
+                                Inchide
+                            </button>
+                            <button type="submit"
+                                    class="inline-flex items-center gap-1 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-medium rounded-md">
+                                <x-heroicon-m-check class="w-4 h-4" />
+                                Inregistreaza interventie
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Sub-modal: Purificator nou / editare purificator (dozator cu filtre) --}}
+    <div x-data="{ deschis: @entangle('modalPurificatorNou') }"
+         x-show="deschis"
+         x-on:keydown.escape.window="$wire.inchideModalPurificator()"
+         style="display: none;"
+         class="fixed inset-0 z-[60] overflow-y-auto px-4 py-6 sm:px-0">
+        <div x-show="deschis" x-on:click="$wire.inchideModalPurificator()"
+             class="fixed inset-0 bg-gray-800 bg-opacity-60"></div>
+
+        <div x-show="deschis"
+             class="relative mb-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl sm:max-w-lg sm:mx-auto">
+            <form wire:submit.prevent="salveazaPurificator" class="p-5">
+                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                    <x-heroicon-o-wrench-screwdriver class="w-5 h-5 text-cyan-600" />
+                    {{ $purificatorEditId ? 'Editeaza purificator' : 'Purificator nou' }}
+                </h3>
+
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div class="col-span-2">
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Produs <span class="text-red-500">*</span></label>
+                        <select wire:model="purificatorIdProdus"
+                                class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm">
+                            <option value="">— Selecteaza —</option>
+                            @foreach($produseCatalog as $prod)
+                                <option value="{{ $prod->id }}" @selected($purificatorIdProdus == $prod->id)>{{ $prod->denumire }}</option>
+                            @endforeach
+                        </select>
+                        @error('purificatorIdProdus') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Marca purificator</label>
+                        <input type="text" wire:model="purificatorSerie" maxlength="100" placeholder="ex: Aquaphor B200"
+                               class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                        @error('purificatorSerie') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Tranzactie <span class="text-red-500">*</span></label>
+                        <select wire:model="purificatorTranzactie"
+                                class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm">
+                            <option value="custodie">Custodie (miscare CUSTODIE)</option>
+                            <option value="cumparat">Cumparat (miscare OUT)</option>
+                        </select>
+                        @error('purificatorTranzactie') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Data instalare <span class="text-red-500">*</span></label>
+                        <input type="date" wire:model.live="purificatorDataInstalare"
+                               class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                        @error('purificatorDataInstalare') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Urmatoarea mentenanta</label>
+                        <input type="date" wire:model="purificatorDataMentenanta"
+                               class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                        <p class="text-[10px] text-gray-400 mt-0.5">Auto-prefill = data instalare + 12 luni</p>
+                        @error('purificatorDataMentenanta') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Garantie (lei)</label>
+                        <input type="number" step="0.01" min="0" wire:model="purificatorGarantie"
+                               class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                        <p class="text-[10px] text-gray-400 mt-0.5">Garantia perceputa la instalare</p>
+                        @error('purificatorGarantie') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div class="col-span-2">
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Observatii</label>
+                        <textarea wire:model="purificatorObservatii" rows="2"
+                                  class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm"></textarea>
+                        @error('purificatorObservatii') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" wire:click="inchideModalPurificator"
+                            class="inline-flex items-center gap-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm rounded-md">
+                        <x-heroicon-m-x-mark class="w-4 h-4" />
+                        Anuleaza
+                    </button>
+                    <button type="submit"
+                            class="inline-flex items-center gap-1 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-medium rounded-md">
+                        <x-heroicon-m-check class="w-4 h-4" />
+                        Salveaza
                     </button>
                 </div>
             </form>

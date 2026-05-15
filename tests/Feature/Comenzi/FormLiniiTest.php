@@ -302,4 +302,86 @@ class FormLiniiTest extends TestCase
             ->call('salveaza')
             ->assertHasErrors(['linii.0.pret']);
     }
+
+    // ─── Depozit implicit ───────────────────────────────────────────────────────
+
+    #[Test]
+    public function mount_preumple_idDepozit_cu_depozitul_implicit(): void
+    {
+        $depozit = Deposit::create(['denumire' => 'ENAQUA', 'adresa' => '', 'activ' => true, 'implicit' => true]);
+
+        $comp = Livewire::actingAs($this->admin)->test(Form::class);
+
+        $this->assertEquals($depozit->id, $comp->get('idDepozit'));
+    }
+
+    #[Test]
+    public function mount_lasa_idDepozit_null_cand_nu_exista_depozit_implicit(): void
+    {
+        // Niciun depozit cu implicit=true
+        $comp = Livewire::actingAs($this->admin)->test(Form::class);
+
+        $this->assertNull($comp->get('idDepozit'));
+    }
+
+    #[Test]
+    public function selectare_adresa_fara_depozit_in_config_pastreaza_depozitul_implicit(): void
+    {
+        $depozit = Deposit::create(['denumire' => 'ENAQUA', 'adresa' => '', 'activ' => true, 'implicit' => true]);
+        // Adresa are config produs fara id_depozit
+        $this->creeazaProdusCfg(['id_depozit' => null]);
+
+        $comp = Livewire::actingAs($this->admin)
+            ->test(Form::class)
+            ->set('idClient', $this->client->id)
+            ->set('idAdresa', $this->adresa->id);
+
+        $this->assertEquals($depozit->id, $comp->get('idDepozit'));
+    }
+
+    #[Test]
+    public function selectare_adresa_cu_depozit_specific_il_foloseste_pe_acela(): void
+    {
+        $implicit  = Deposit::create(['denumire' => 'ENAQUA', 'adresa' => '', 'activ' => true, 'implicit' => true]);
+        $specific  = Deposit::create(['denumire' => 'Depozit Vest', 'adresa' => '', 'activ' => true, 'implicit' => false]);
+        $this->creeazaProdusCfg(['id_depozit' => $specific->id]);
+
+        $comp = Livewire::actingAs($this->admin)
+            ->test(Form::class)
+            ->set('idClient', $this->client->id)
+            ->set('idAdresa', $this->adresa->id);
+
+        $this->assertEquals($specific->id, $comp->get('idDepozit'));
+    }
+
+    #[Test]
+    public function golire_adresa_reseteaza_idDepozit_la_implicit(): void
+    {
+        $depozit = Deposit::create(['denumire' => 'ENAQUA', 'adresa' => '', 'activ' => true, 'implicit' => true]);
+        $this->creeazaProdusCfg();
+
+        $comp = Livewire::actingAs($this->admin)
+            ->test(Form::class)
+            ->set('idClient', $this->client->id)
+            ->set('idAdresa', $this->adresa->id);
+
+        // Golim adresa
+        $comp->set('idAdresa', '');
+
+        $this->assertEquals($depozit->id, $comp->get('idDepozit'));
+    }
+
+    #[Test]
+    public function adresa_fara_config_produs_pastreaza_depozitul_implicit(): void
+    {
+        $depozit = Deposit::create(['denumire' => 'ENAQUA', 'adresa' => '', 'activ' => true, 'implicit' => true]);
+        // Adresa fara produs config deloc
+
+        $comp = Livewire::actingAs($this->admin)
+            ->test(Form::class)
+            ->set('idClient', $this->client->id)
+            ->set('idAdresa', $this->adresa->id);
+
+        $this->assertEquals($depozit->id, $comp->get('idDepozit'));
+    }
 }

@@ -73,9 +73,8 @@ class Produs extends Model
     public function etichetaTip(): string
     {
         return match ($this->abonament) {
-            self::TIP_ABONAMENT => 'Abonament',
-            self::TIP_FILTRE => 'Filtre',
-            self::TIP_APARATE => 'Aparate',
+            self::TIP_ABONAMENT, self::TIP_APARATE => 'Bidoane',
+            self::TIP_FILTRE => 'Purificator',
             default => 'Per bucata',
         };
     }

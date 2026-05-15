@@ -61,8 +61,8 @@ class Form extends Component
             $this->incarcaComanda($comanda->id);
             $this->aprobaLaSalvare = request()->boolean('aprobare') && $this->eraInAsteptare;
         } else {
-            $this->dataLivrare = now()->toDateString();
             $this->lunaLivrata = now()->format('Y/m');
+            $this->idDepozit = Deposit::implicit()?->id;
             $this->adaugaLinieGoala();
 
             // Faza 5.4 — pre-fill din query string cand admin vine din raportul
@@ -185,7 +185,7 @@ class Form extends Component
         if (! $produs) {
             // Adresa nu are configurare — golim asignarea + linii la default
             $this->idMasina = null;
-            $this->idDepozit = null;
+            $this->idDepozit = Deposit::implicit()?->id;
             $this->tipComanda = Comanda::TIP_FARA_ABONAMENT;
             $this->linii = [[
                 'id_produs' => null,
@@ -198,7 +198,7 @@ class Form extends Component
 
         // Suprascriem asignarea default cu cea de pe noua adresa
         $this->idMasina = $produs->id_masina;
-        $this->idDepozit = $produs->id_depozit;
+        $this->idDepozit = $produs->id_depozit ?? Deposit::implicit()?->id;
 
         // Auto-detectare tip + linii din configurarea adresei
         if ($produs->isAbonament()) {
@@ -218,7 +218,7 @@ class Form extends Component
     private function resetCampuriDinAdresa(): void
     {
         $this->idMasina = null;
-        $this->idDepozit = null;
+        $this->idDepozit = Deposit::implicit()?->id;
         $this->nume = '';
         $this->telefon = '';
         $this->observatii = '';

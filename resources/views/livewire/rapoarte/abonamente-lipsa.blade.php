@@ -77,7 +77,7 @@
                                                class="text-gray-900 dark:text-gray-100 font-medium hover:text-indigo-600">
                                                 {{ $r['client']?->denumire ?? '—' }}
                                             </a>
-                                            <span class="block text-xs text-gray-500">{{ $r['adresa']->denumire }}</span>
+                                            <span class="block text-xs text-gray-500">{{ $r['adresa']->eticheta }}</span>
                                         </td>
                                         <td class="px-3 py-2">
                                             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs {{ $this->culoareTipAbonament($r['tipAbonament']) }}">

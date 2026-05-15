@@ -62,6 +62,20 @@ class AdresaLivrare extends Model
         return $this->hasOne(Produs::class, 'id_adresa');
     }
 
+    /**
+     * Eticheta scurta pentru dropdown-uri si liste: strada nr · oras.
+     * Fallback pe denumire daca strada lipseste.
+     */
+    public function getEtichetaAttribute(): string
+    {
+        if ($this->strada) {
+            $label = $this->strada . ($this->nr ? ' ' . $this->nr : '');
+            return $label . ($this->oras ? ' · ' . $this->oras : '');
+        }
+
+        return $this->denumire . ($this->oras ? ' · ' . $this->oras : '');
+    }
+
     public function adresaCompleta(): string
     {
         $parti = array_filter([

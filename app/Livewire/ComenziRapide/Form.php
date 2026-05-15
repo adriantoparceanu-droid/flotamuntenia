@@ -39,6 +39,7 @@ class Form extends Component
             $this->incarca($rapida);
         } else {
             $this->dataLivrare = now()->toDateString();
+            $this->idDepozit = Deposit::implicit()?->id;
             $this->adaugaLinieGoala();
         }
     }

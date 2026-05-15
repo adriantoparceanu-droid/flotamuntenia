@@ -65,9 +65,7 @@
                     <ul class="divide-y divide-gray-100">
                         @foreach($client->adrese as $a)
                             <li class="py-3">
-                                @if($a->denumire)
-                                    <div class="text-sm font-medium text-gray-900">{{ $a->denumire }}</div>
-                                @endif
+                                <div class="text-sm font-medium text-gray-900">{{ $a->eticheta }}</div>
                                 <div class="text-sm text-gray-700">{{ $a->adresaCompleta() }}</div>
                                 @if($a->interfon)
                                     <div class="text-xs text-gray-500 mt-1">Interfon: {{ $a->interfon }}</div>

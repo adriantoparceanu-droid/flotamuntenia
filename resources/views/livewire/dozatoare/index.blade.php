@@ -169,7 +169,7 @@
                                             {{ $d->client?->denumire ?? '—' }}
                                         </a>
                                         @if($d->adresa)
-                                            <span class="text-xs text-gray-500 block">{{ $d->adresa->denumire }}</span>
+                                            <span class="text-xs text-gray-500 block">{{ $d->adresa->eticheta }}</span>
                                         @endif
                                     </td>
                                     <td class="px-3 py-2 text-gray-700 dark:text-gray-300 text-xs">
@@ -289,12 +289,12 @@
                                                     <x-heroicon-o-clipboard-document-list class="w-5 h-5" />
                                                 </button>
                                             @endif
-                                            <button type="button" wire:click="editeaza({{ $d->id }})"
-                                                    title="Editeaza dozator"
-                                                    aria-label="Editeaza dozator"
-                                                    class="text-indigo-600 hover:text-indigo-800">
+                                            <a href="{{ route('clienti.detalii', $d->id_client) }}?tab=adrese" wire:navigate
+                                               title="Editeaza — deschide adresa clientului"
+                                               aria-label="Editeaza dozator"
+                                               class="text-indigo-600 hover:text-indigo-800">
                                                 <x-heroicon-o-pencil-square class="w-5 h-5" />
-                                            </button>
+                                            </a>
                                             <button type="button" wire:click="comutaActiv({{ $d->id }})"
                                                     title="{{ $rowActiv ? ($esteFiltre ? 'Marcheaza ca retras' : 'Marcheaza ca recuperat (dezactiveaza)') : 'Reactiveaza dozator' }}"
                                                     aria-label="{{ $rowActiv ? ($esteFiltre ? 'Retrage' : 'Recuperat') : 'Reactivare' }}"
@@ -374,7 +374,7 @@
                             @disabled(! $idClient)>
                         <option value="">@if($idClient) — Selecteaza adresa — @else Selecteaza intai clientul @endif</option>
                         @foreach($adreseClient as $a)
-                            <option value="{{ $a->id }}">{{ $a->denumire }} ({{ $a->oras }})</option>
+                            <option value="{{ $a->id }}">{{ $a->eticheta }}</option>
                         @endforeach
                     </select>
                     @error('idAdresa') <span class="text-xs text-red-600">{{ $message }}</span> @enderror

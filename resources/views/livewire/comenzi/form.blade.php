@@ -106,7 +106,7 @@
                                 <option value="">@if(! $idClient)— alege intai clientul —@else— alege adresa —@endif</option>
                                 @foreach($adrese as $a)
                                     <option value="{{ $a->id }}">
-                                        {{ $a->denumire }}{{ $a->oras ? ' · ' . $a->oras : '' }}
+                                        {{ $a->eticheta }}
                                     </option>
                                 @endforeach
                             </select>
@@ -154,7 +154,7 @@
                         <div>
                             <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Data livrare *</label>
                             <input type="date" wire:model.live="dataLivrare"
-                                   class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                                   class="mt-1 block w-full rounded-md text-sm dark:bg-gray-900 dark:text-gray-100 {{ $dataLivrare === '' ? 'border-red-500' : 'border-gray-300 dark:border-gray-700' }}" />
                             @error('dataLivrare') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
                         </div>
 
@@ -262,7 +262,7 @@
                                     class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm">
                                 <option value="">— nealocata —</option>
                                 @foreach($masini as $m)
-                                    <option value="{{ $m->id }}">{{ $m->denumire }} ({{ $m->nr_inmatriculare }})</option>
+                                    <option value="{{ $m->id }}" @selected($idMasina == $m->id)>{{ $m->denumire }} ({{ $m->nr_inmatriculare }})</option>
                                 @endforeach
                             </select>
                         </div>
@@ -272,7 +272,7 @@
                                     class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm">
                                 <option value="">— neales —</option>
                                 @foreach($depozite as $d)
-                                    <option value="{{ $d->id }}">{{ $d->denumire }}</option>
+                                    <option value="{{ $d->id }}" @selected($idDepozit == $d->id)>{{ $d->denumire }}</option>
                                 @endforeach
                             </select>
                             <p class="text-[11px] text-gray-500 mt-1">

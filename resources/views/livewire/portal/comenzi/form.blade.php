@@ -41,7 +41,7 @@
                         <option value="">— Selecteaza adresa —</option>
                         @foreach($adrese as $a)
                             <option value="{{ $a->id }}">
-                                {{ $a->denumire ? $a->denumire . ' — ' : '' }}{{ $a->adresaCompleta() }}
+                                {{ $a->eticheta }}
                             </option>
                         @endforeach
                     </select>
