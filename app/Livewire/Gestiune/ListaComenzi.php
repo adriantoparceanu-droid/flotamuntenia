@@ -183,6 +183,29 @@ class ListaComenzi extends Component
 
         $totalComenzi = $clasice->count() + $rapide->count() + $probleme->count();
 
+        // Totaluri financiare per modalitate de plata (toate tipurile, inclusiv probleme)
+        $totalPePlata = [
+            Comanda::MODPLATA_CASH => 0.0,
+            Comanda::MODPLATA_OP   => 0.0,
+            Comanda::MODPLATA_CARD => 0.0,
+            Comanda::MODPLATA_ALTA => 0.0,
+        ];
+        foreach ($clasice as $c) {
+            $cod = (int) ($c->id_modalitate_plata ?? Comanda::MODPLATA_CASH);
+            $cod = array_key_exists($cod, $totalPePlata) ? $cod : Comanda::MODPLATA_CASH;
+            $totalPePlata[$cod] += (float) $c->total();
+        }
+        foreach ($rapide as $c) {
+            // ComandaRapida nu are modalitate de plata — mereu Cash
+            $totalPePlata[Comanda::MODPLATA_CASH] += (float) $c->total();
+        }
+        foreach ($probleme as $p) {
+            $cod = (int) ($p->id_modalitate_plata ?? Comanda::MODPLATA_CASH);
+            $cod = array_key_exists($cod, $totalPePlata) ? $cod : Comanda::MODPLATA_CASH;
+            $totalPePlata[$cod] += (float) $p->total();
+        }
+        $totalGlobal = array_sum($totalPePlata);
+
         return view('livewire.gestiune.lista-comenzi', [
             'masini'            => $masini,
             'depozite'          => $depozite,
@@ -191,6 +214,8 @@ class ListaComenzi extends Component
             'produseTotale'     => $produseTotale,
             'produsePerMasina'  => array_values($produsePerMasina),
             'totalComenzi'      => $totalComenzi,
+            'totalPePlata'      => $totalPePlata,
+            'totalGlobal'       => $totalGlobal,
         ]);
     }
 }

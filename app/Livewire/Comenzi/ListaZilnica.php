@@ -443,6 +443,30 @@ class ListaZilnica extends Component
         }
         $totalGlobal = array_sum($totalPePlata);
 
+        // Sumar produse (clasice + rapide; probleme excluse — sunt servicii fara linii de produs)
+        $sumarProduse = [];
+        foreach ($clasice as $c) {
+            foreach ($c->produse as $linie) {
+                $cantitate = (int) $linie->cantitate;
+                if ($cantitate <= 0) {
+                    continue;
+                }
+                $denumire = $linie->produs?->denumire ?? 'Produs necunoscut';
+                $sumarProduse[$denumire] = ($sumarProduse[$denumire] ?? 0) + $cantitate;
+            }
+        }
+        foreach ($rapide as $c) {
+            foreach ($c->produse as $linie) {
+                $cantitate = (int) $linie->cantitate;
+                if ($cantitate <= 0) {
+                    continue;
+                }
+                $denumire = $linie->produs?->denumire ?? 'Produs necunoscut';
+                $sumarProduse[$denumire] = ($sumarProduse[$denumire] ?? 0) + $cantitate;
+            }
+        }
+        arsort($sumarProduse);
+
         // Sumar achitat per masina (doar comenzi cu achitat=true)
         // Format: [idMasina|0 => ['nume' => ..., 'cash' => x, 'op' => x, 'card' => x, 'alta' => x, 'total' => x]]
         $sumarPerMasina = [];
@@ -505,6 +529,7 @@ class ListaZilnica extends Component
             'apiKey' => config('services.google_maps.key'),
             'totalPePlata' => $totalPePlata,
             'totalGlobal' => $totalGlobal,
+            'sumarProduse' => $sumarProduse,
             'sumarPerMasina' => $sumarPerMasina,
         ]);
     }

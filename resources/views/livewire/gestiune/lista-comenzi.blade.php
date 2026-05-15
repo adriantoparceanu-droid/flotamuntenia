@@ -179,6 +179,91 @@
 
             </div>
 
+            {{-- Sumar zi: produse + financiar --}}
+            @if($totalComenzi > 0)
+                <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
+                    <div class="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 flex items-center gap-2">
+                        <x-heroicon-o-calculator class="w-4 h-4 text-gray-400" />
+                        <span class="text-sm font-semibold text-gray-700 dark:text-gray-200">Sumar zi</span>
+                    </div>
+                    <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+
+                        {{-- Produse --}}
+                        <div>
+                            <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Produse livrate</p>
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="border-b border-gray-100 dark:border-gray-700">
+                                        <th class="text-left pb-1.5 font-medium text-gray-500 dark:text-gray-400">Produs</th>
+                                        <th class="text-right pb-1.5 font-medium text-gray-500 dark:text-gray-400 w-20">Cant.</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-50 dark:divide-gray-700/50">
+                                    @forelse($produseTotale as $denumire => $cantitate)
+                                        <tr>
+                                            <td class="py-1.5 text-gray-700 dark:text-gray-300">{{ $denumire }}</td>
+                                            <td class="py-1.5 text-right font-semibold tabular-nums text-gray-900 dark:text-gray-100">{{ $cantitate }}</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="2" class="py-3 text-gray-400 dark:text-gray-500 italic text-xs">Niciun produs pe comenzile din aceasta zi.</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                                @if(!empty($produseTotale))
+                                    <tfoot>
+                                        <tr class="border-t border-gray-200 dark:border-gray-600">
+                                            <td class="pt-2 text-xs text-gray-500 dark:text-gray-400">Total bucăți</td>
+                                            <td class="pt-2 text-right font-bold tabular-nums text-gray-800 dark:text-gray-200">{{ array_sum($produseTotale) }}</td>
+                                        </tr>
+                                    </tfoot>
+                                @endif
+                            </table>
+                        </div>
+
+                        {{-- Financiar --}}
+                        <div>
+                            <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Sumar financiar</p>
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="border-b border-gray-100 dark:border-gray-700">
+                                        <th class="text-left pb-1.5 font-medium text-gray-500 dark:text-gray-400">Modalitate</th>
+                                        <th class="text-right pb-1.5 font-medium text-gray-500 dark:text-gray-400 w-36">Sumă</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-50 dark:divide-gray-700/50">
+                                    <tr>
+                                        <td class="py-1.5 text-gray-700 dark:text-gray-300">Cash</td>
+                                        <td class="py-1.5 text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">{{ number_format($totalPePlata[1] ?? 0, 2, ',', '.') }} lei</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="py-1.5 text-gray-700 dark:text-gray-300">OP</td>
+                                        <td class="py-1.5 text-right tabular-nums font-semibold text-blue-700 dark:text-blue-400">{{ number_format($totalPePlata[2] ?? 0, 2, ',', '.') }} lei</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="py-1.5 text-gray-700 dark:text-gray-300">Card</td>
+                                        <td class="py-1.5 text-right tabular-nums font-semibold text-purple-700 dark:text-purple-400">{{ number_format($totalPePlata[3] ?? 0, 2, ',', '.') }} lei</td>
+                                    </tr>
+                                    @if(($totalPePlata[4] ?? 0) > 0)
+                                        <tr>
+                                            <td class="py-1.5 text-gray-700 dark:text-gray-300">Altă</td>
+                                            <td class="py-1.5 text-right tabular-nums font-semibold text-gray-700 dark:text-gray-300">{{ number_format($totalPePlata[4], 2, ',', '.') }} lei</td>
+                                        </tr>
+                                    @endif
+                                </tbody>
+                                <tfoot>
+                                    <tr class="border-t border-gray-200 dark:border-gray-600">
+                                        <td class="pt-2 font-bold text-gray-800 dark:text-gray-200">Total</td>
+                                        <td class="pt-2 text-right font-bold tabular-nums text-gray-900 dark:text-gray-100 text-base">{{ number_format($totalGlobal, 2, ',', '.') }} lei</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+
+                    </div>
+                </div>
+            @endif
+
         </div>
     </div>
 </div>
