@@ -113,8 +113,12 @@ class Utilizatori extends Component
                 'unique:users,username,' . ($this->editandId ?? 'NULL'),
             ],
             'tip' => 'required|integer|in:' . implode(',', array_keys($this->roluriDisponibile())),
-            // Parola: obligatorie la creare, optionala la edit (lasa gol pentru pastrare)
-            'password' => $this->editandId ? 'nullable|string|min:6|max:255' : 'required|string|min:6|max:255',
+            // Parola: obligatorie la creare pentru non-client; optionala la edit
+            // (lasa gol pentru pastrare) si la creare tip=3 (clientul o seteaza
+            // din linkul de activare — se genereaza automat random daca e goala).
+            'password' => ($this->editandId || $this->tip === User::TIP_CLIENT)
+                ? 'nullable|string|min:6|max:255'
+                : 'required|string|min:6|max:255',
             // id_masina obligatoriu doar pentru sofer
             'idMasina' => $this->tip === User::TIP_SOFER
                 ? 'required|exists:cars,id'
@@ -248,10 +252,12 @@ class Utilizatori extends Component
             'confirmat' => $this->confirmat,
         ];
 
-        // Parola: doar daca e completata (la creare e obligatorie via rules; la
-        // edit sare daca e goala — pastrand parola existenta).
         if (! empty($date['password'])) {
             $atribute['password'] = Hash::make($date['password']);
+        } elseif (! $this->editandId) {
+            // Cont nou fara parola (tip=3 cu flux invitatie) — parola temporara
+            // irelevanta; clientul o va reseta din linkul de activare.
+            $atribute['password'] = Hash::make(Str::random(16));
         }
 
         User::updateOrCreate(['id' => $this->editandId], $atribute);

@@ -227,6 +227,68 @@
                                 @endif
                             </div>
                         @endif
+
+                        {{-- Acces portal client --}}
+                        <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                            <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                                <x-heroicon-o-globe-alt class="w-5 h-5" />
+                                Acces portal client
+                            </h3>
+
+                            @if($conturiPortal->isEmpty())
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                                    Clientul nu are niciun cont de acces portal configurat.
+                                </p>
+                                <button wire:click="deschideModalPortal"
+                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium rounded-md">
+                                    <x-heroicon-m-user-plus class="w-4 h-4" />
+                                    Creeaza cont portal
+                                </button>
+                            @else
+                                <div class="space-y-2 mb-3">
+                                    @foreach($conturiPortal as $cp)
+                                        <div class="flex items-center justify-between gap-4 p-3 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                                            <div class="min-w-0">
+                                                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ $cp->name }}</div>
+                                                <div class="text-xs text-gray-500 font-mono">
+                                                    {{ $cp->email }}
+                                                    @if($cp->username)
+                                                        · @<span>{{ $cp->username }}</span>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center gap-3 flex-shrink-0">
+                                                @if($cp->confirmat)
+                                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">
+                                                        <x-heroicon-s-check-circle class="w-3 h-3" /> Activ
+                                                    </span>
+                                                @elseif($cp->activation_token && $cp->activation_expires_at && !$cp->activation_expires_at->isPast())
+                                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-700">
+                                                        <x-heroicon-s-clock class="w-3 h-3" />
+                                                        Invitat (exp. {{ $cp->activation_expires_at->format('d.m.Y') }})
+                                                    </span>
+                                                @else
+                                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-200 text-gray-600 dark:text-gray-400">
+                                                        <x-heroicon-s-x-circle class="w-3 h-3" /> Neactivat
+                                                    </span>
+                                                @endif
+                                                <button wire:click="trimiteInvitatiePortal({{ $cp->id }})"
+                                                        wire:confirm="Trimit un nou link de activare catre {{ $cp->email }}?"
+                                                        class="inline-flex items-center gap-1 text-sky-600 hover:text-sky-800 text-xs whitespace-nowrap">
+                                                    <x-heroicon-m-envelope class="w-3.5 h-3.5" />
+                                                    {{ $cp->confirmat ? 'Trimite link resetare' : 'Re-trimite invitatie' }}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                                <button wire:click="deschideModalPortal"
+                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium rounded-md">
+                                    <x-heroicon-m-user-plus class="w-4 h-4" />
+                                    Adauga cont portal
+                                </button>
+                            @endif
+                        </div>
                     @endif
 
                     {{-- Tab Adrese --}}
@@ -1898,6 +1960,83 @@
                             class="inline-flex items-center gap-1 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-medium rounded-md">
                         <x-heroicon-m-check class="w-4 h-4" />
                         Salveaza
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {{-- Modal creare cont portal client --}}
+    <div x-data="{ deschis: @entangle('modalPortal') }"
+         x-show="deschis"
+         x-on:keydown.escape.window="$wire.inchideModalPortal()"
+         style="display:none"
+         class="fixed inset-0 z-50 overflow-y-auto px-4 py-6 sm:px-0">
+
+        <div x-show="deschis" x-on:click="$wire.inchideModalPortal()"
+             class="fixed inset-0 bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75"></div>
+
+        <div x-show="deschis"
+             class="relative mb-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl sm:max-w-md sm:mx-auto">
+            <form wire:submit.prevent="salveazaContPortal" class="p-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1 flex items-center gap-2">
+                    <x-heroicon-o-globe-alt class="w-5 h-5 text-sky-600" />
+                    Creeaza cont portal
+                </h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                    Clientul va primi un email cu linkul de activare (valabil 7 zile).
+                    Parola se seteaza la prima accesare a linkului.
+                </p>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Nume afișat</label>
+                        <input type="text" wire:model="portalNume" maxlength="255" autofocus
+                               class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                        @error('portalNume') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
+                        <input type="email" wire:model="portalEmail" maxlength="255"
+                               class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                        @error('portalEmail') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Username
+                            <span class="text-xs text-gray-500">(opțional, pentru login rapid)</span>
+                        </label>
+                        <input type="text" wire:model="portalUsername" maxlength="50"
+                               placeholder="ex: ion.popescu"
+                               class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm font-mono lowercase" />
+                        <p class="text-[11px] text-gray-500 mt-0.5">Litere mici, cifre, punct sau sublinie (3-50 caractere).</p>
+                        @error('portalUsername') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Parolă inițială
+                            <span class="text-xs text-gray-500">(opțional — clientul o poate schimba din link)</span>
+                        </label>
+                        <input type="password" wire:model="portalParola" maxlength="255" autocomplete="new-password"
+                               placeholder="Lasati gol — clientul o seteaza din linkul de invitatie"
+                               class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                        @error('portalParola') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end gap-2">
+                    <button type="button" wire:click="inchideModalPortal"
+                            class="inline-flex items-center gap-1.5 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm rounded-md">
+                        <x-heroicon-m-x-mark class="w-4 h-4" />
+                        Anulează
+                    </button>
+                    <button type="submit"
+                            class="inline-flex items-center gap-1.5 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium rounded-md">
+                        <x-heroicon-m-envelope class="w-4 h-4" />
+                        Creeaza și trimite invitatie
                     </button>
                 </div>
             </form>

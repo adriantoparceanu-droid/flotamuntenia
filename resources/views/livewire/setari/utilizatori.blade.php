@@ -34,8 +34,8 @@
                         <select wire:model.live="filtruRol"
                                 class="rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm">
                             <option value="">Toate rolurile</option>
-                            @foreach($roluri as $tip => $eticheta)
-                                <option value="{{ $tip }}">{{ $eticheta }}</option>
+                            @foreach($roluri as $filtruTip => $filtruEticheta)
+                                <option value="{{ $filtruTip }}">{{ $filtruEticheta }}</option>
                             @endforeach
                         </select>
                         <label class="inline-flex items-center text-sm text-gray-600 dark:text-gray-300">
@@ -253,13 +253,45 @@
                                 Client asociat
                                 <span class="text-xs text-gray-500">(contul vede DOAR comenzile acestui client)</span>
                             </label>
-                            <select wire:model="idClient"
-                                    class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm">
-                                <option value="">— alege client —</option>
-                                @foreach($clienti as $c)
-                                    <option value="{{ $c->id }}">{{ $c->denumire }}</option>
-                                @endforeach
-                            </select>
+                            {{-- x-data apeleaza functia definita in @script — evita JS complex
+                                 in atribut HTML (arrow functions cu > sparg tag-ul HTML) --}}
+                            <div x-data="clientComboboxUtil({{ $idClient ?? 'null' }})"
+                                 @click.outside="open = false"
+                                 class="relative mt-1">
+
+                                <template x-if="!eticheta">
+                                    <input type="text"
+                                           x-model="search"
+                                           @focus="open = true"
+                                           @input="open = true"
+                                           placeholder="Cauta client dupa denumire..."
+                                           class="block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
+                                </template>
+                                <template x-if="eticheta">
+                                    <div class="flex items-center gap-2 px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm">
+                                        <span class="flex-1 truncate text-gray-900 dark:text-gray-100" x-text="eticheta"></span>
+                                        <button type="button" @click.prevent="sterge()"
+                                                class="text-gray-400 hover:text-red-500 flex-shrink-0"
+                                                title="Sterge selectia">
+                                            <x-heroicon-m-x-mark class="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </template>
+
+                                <ul x-show="open && filtrata.length > 0"
+                                    class="absolute z-50 mt-1 w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-52 overflow-auto text-sm"
+                                    style="display:none">
+                                    <template x-for="c in filtrata" :key="c.id">
+                                        <li>
+                                            <button type="button"
+                                                    @click="alege(c.id)"
+                                                    class="w-full text-left px-3 py-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-gray-900 dark:text-gray-100"
+                                                    x-text="c.text">
+                                            </button>
+                                        </li>
+                                    </template>
+                                </ul>
+                            </div>
                             @error('idClient') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
                         </div>
                     @endif
@@ -272,7 +304,7 @@
                             @endif
                         </label>
                         <input type="password" wire:model="password" maxlength="255" autocomplete="new-password"
-                               placeholder="{{ $editandId ? 'Lasati gol pentru pastrare' : 'Minim 6 caractere' }}"
+                               placeholder="{{ $editandId ? 'Lasati gol pentru pastrare' : ($tip == \App\Models\User::TIP_CLIENT ? 'Lasati gol — clientul o seteaza din linkul de invitatie' : 'Minim 6 caractere') }}"
                                class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-100 text-sm" />
                         @error('password') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
                     </div>
@@ -307,3 +339,43 @@
         </div>
     </div>
 </div>
+
+@script
+<script>
+    window.__clientiPortalLista = @json($clienti->map(fn($c) => ['id' => $c->id, 'text' => $c->denumire]));
+
+    window.clientComboboxUtil = function(initialId) {
+        return {
+            search: '',
+            open: false,
+            idSel: initialId,
+            lista: window.__clientiPortalLista || [],
+            get filtrata() {
+                var q = this.search.toLowerCase();
+                var src = q.length >= 1
+                    ? this.lista.filter(function(c) { return c.text.toLowerCase().indexOf(q) !== -1; })
+                    : this.lista;
+                return src.slice(0, 40);
+            },
+            get eticheta() {
+                if (!this.idSel) return null;
+                for (var i = 0; i < this.lista.length; i++) {
+                    if (this.lista[i].id == this.idSel) return this.lista[i].text;
+                }
+                return null;
+            },
+            alege: function(id) {
+                this.idSel = id;
+                this.$wire.set('idClient', id);
+                this.search = '';
+                this.open = false;
+            },
+            sterge: function() {
+                this.idSel = null;
+                this.$wire.set('idClient', null);
+                this.search = '';
+            }
+        };
+    };
+</script>
+@endscript

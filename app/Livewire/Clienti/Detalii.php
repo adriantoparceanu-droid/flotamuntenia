@@ -14,8 +14,13 @@ use App\Models\Problema;
 use App\Models\Produs;
 use App\Models\Recipient;
 use App\Models\Vizita;
+use App\Models\User;
 use App\Services\ContracteService;
+use App\Services\MailService;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -120,6 +125,13 @@ class Detalii extends Component
     #[Url(as: 'rec_adresa')]
     public ?int $recFiltruAdresa = null;
 
+    // ===== Modal portal client =====
+    public bool $modalPortal = false;
+    public string $portalNume = '';
+    public string $portalEmail = '';
+    public string $portalUsername = '';
+    public string $portalParola = '';
+
     // ===== Tab Contract (Faza 6.2) =====
     // Continutul HTML curent al contractului — sincronizat cu TinyMCE prin
     // wire:ignore + Alpine wrapper (vezi view-ul detalii.blade.php).
@@ -145,6 +157,81 @@ class Detalii extends Component
         if ($this->tab === 'contract') {
             $this->incarcaContract();
         }
+    }
+
+    // ===== Portal client =====
+
+    public function deschideModalPortal(): void
+    {
+        $this->portalNume = $this->client->denumire;
+        $this->portalEmail = $this->client->email ?? '';
+        $this->portalUsername = '';
+        $this->portalParola = '';
+        $this->resetErrorBag();
+        $this->modalPortal = true;
+    }
+
+    public function inchideModalPortal(): void
+    {
+        $this->modalPortal = false;
+        $this->resetErrorBag();
+    }
+
+    public function salveazaContPortal(): void
+    {
+        $date = $this->validate([
+            'portalNume'     => 'required|string|max:255',
+            'portalEmail'    => 'required|email|max:255|unique:users,email',
+            'portalUsername' => ['nullable', 'string', 'regex:/^[a-z0-9._]{3,50}$/', 'unique:users,username'],
+            'portalParola'   => 'nullable|string|min:6|max:255',
+        ], [
+            'portalNume.required'    => 'Numele este obligatoriu.',
+            'portalEmail.required'   => 'Adresa de email este obligatorie.',
+            'portalEmail.email'      => 'Adresa de email nu este valida.',
+            'portalEmail.unique'     => 'Exista deja un cont cu aceasta adresa de email.',
+            'portalUsername.regex'   => 'Username-ul accepta doar litere mici, cifre, punct si sublinie (3-50 caractere).',
+            'portalUsername.unique'  => 'Exista deja un cont cu acest username.',
+            'portalParola.min'       => 'Parola trebuie sa aiba minim 6 caractere.',
+        ]);
+
+        $user = User::create([
+            'name'      => $date['portalNume'],
+            'email'     => $date['portalEmail'],
+            'username'  => ! empty($date['portalUsername']) ? $date['portalUsername'] : null,
+            'password'  => Hash::make(! empty($date['portalParola']) ? $date['portalParola'] : Str::random(16)),
+            'tip'       => User::TIP_CLIENT,
+            'confirmat' => false,
+            'id_client' => $this->client->id,
+        ]);
+
+        $this->trimiteInvitatiePortal($user->id);
+
+        $this->modalPortal = false;
+        $this->resetErrorBag();
+    }
+
+    public function trimiteInvitatiePortal(int $userId): void
+    {
+        $u = User::findOrFail($userId);
+
+        if ((int) $u->id_client !== $this->client->id || $u->tip !== User::TIP_CLIENT) {
+            return;
+        }
+
+        $u->forceFill([
+            'activation_token'      => (string) Str::uuid(),
+            'activation_expires_at' => Carbon::now()->addDays(7),
+        ])->save();
+
+        $link = route('portal.activare', ['token' => $u->activation_token]);
+
+        MailService::send('portal_invitatie', $u->email, [
+            'nume'   => $u->name,
+            'link'   => $link,
+            'expira' => $u->activation_expires_at->format('d.m.Y H:i'),
+        ]);
+
+        session()->flash('mesaj', "Invitatie trimisa catre {$u->email}. Expira in 7 zile.");
     }
 
     // ===== Reziliere =====
@@ -1045,7 +1132,14 @@ class Detalii extends Component
                 ->get()
             : collect();
 
+        $conturiPortal = User::where('id_client', $this->client->id)
+            ->where('tip', User::TIP_CLIENT)
+            ->orderByDesc('confirmat')
+            ->orderBy('name')
+            ->get();
+
         return view('livewire.clienti.detalii', [
+            'conturiPortal' => $conturiPortal,
             'adrese' => $adrese,
             'numarAdrese' => $adrese->count(),
             'masiniDisponibile' => Car::where('activ', true)->orderBy('denumire')->get(),
