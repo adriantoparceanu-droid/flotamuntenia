@@ -96,6 +96,19 @@ class Form extends Component
                     $this->dataLivrare = $m[1] . '-' . $m[2] . '-01';
                 }
             }
+
+            // Pre-selectare client din lista clienti: /comenzi/noua?client=ID
+            // Nu suprascriem daca a fost deja setat de blocul id_adresa de mai sus.
+            if (!$this->idClient) {
+                $idClientQuery = (int) request()->query('client', 0);
+                if ($idClientQuery > 0) {
+                    $client = Client::find($idClientQuery);
+                    if ($client) {
+                        $this->idClient = $client->id;
+                        $this->cautareClient = $client->denumire;
+                    }
+                }
+            }
         }
     }
 

@@ -54,8 +54,8 @@
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
                         <thead class="bg-gray-50 dark:bg-gray-900">
                             <tr>
-                                <th class="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Cod</th>
                                 <th class="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Denumire</th>
+                                <th class="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Servicii</th>
                                 <th class="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Tip</th>
                                 <th class="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-300">CIF / CNP</th>
                                 <th class="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Contact</th>
@@ -67,12 +67,35 @@
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
                             @forelse($clienti as $c)
                                 <tr>
-                                    <td class="px-4 py-2 text-gray-700 dark:text-gray-300 font-mono text-xs">{{ $c->cod_client }}</td>
                                     <td class="px-4 py-2 text-gray-900 dark:text-gray-100 font-medium">
                                         <a href="{{ route('clienti.detalii', $c) }}" wire:navigate
                                            class="hover:text-indigo-600">
                                             {{ $c->denumire }}
                                         </a>
+                                        <div class="text-xs font-mono text-gray-400 dark:text-gray-500 mt-0.5">{{ $c->cod_client }}</div>
+                                    </td>
+                                    <td class="px-4 py-2">
+                                        @if(!$c->are_abonament && !$c->are_filtre && !$c->are_per_bucata)
+                                            <span class="text-gray-400 dark:text-gray-500 text-xs">—</span>
+                                        @else
+                                            <div class="flex flex-wrap gap-1">
+                                                @if($c->are_abonament)
+                                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                                                        Abonament
+                                                    </span>
+                                                @endif
+                                                @if($c->are_filtre)
+                                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                                        Filtre
+                                                    </span>
+                                                @endif
+                                                @if($c->are_per_bucata)
+                                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                                                        Per bucată
+                                                    </span>
+                                                @endif
+                                            </div>
+                                        @endif
                                     </td>
                                     <td class="px-4 py-2">
                                         @if($c->isPJ())
@@ -107,11 +130,18 @@
                                         @endif
                                     </td>
                                     <td class="px-4 py-2 text-right">
-                                        <a href="{{ route('clienti.detalii', $c) }}" wire:navigate
-                                           class="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 text-sm">
-                                            <x-heroicon-m-arrow-top-right-on-square class="w-4 h-4" />
-                                            Detalii
-                                        </a>
+                                        <div class="inline-flex items-center gap-1">
+                                            <a href="{{ route('comenzi.noua') }}?client={{ $c->id }}" wire:navigate
+                                               title="Comandă nouă"
+                                               class="p-1.5 rounded text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 hover:text-green-800 transition-colors">
+                                                <x-heroicon-m-document-plus class="w-4 h-4" />
+                                            </a>
+                                            <a href="{{ route('clienti.detalii', $c) }}" wire:navigate
+                                               title="Detalii client"
+                                               class="p-1.5 rounded text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-800 transition-colors">
+                                                <x-heroicon-m-arrow-top-right-on-square class="w-4 h-4" />
+                                            </a>
+                                        </div>
                                     </td>
                                 </tr>
                             @empty

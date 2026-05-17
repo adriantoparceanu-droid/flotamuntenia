@@ -3,6 +3,7 @@
 namespace App\Livewire\Clienti;
 
 use App\Models\Client;
+use App\Models\Produs;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -40,7 +41,13 @@ class Index extends Component
 
     public function render()
     {
-        $query = Client::query()->withCount('adrese');
+        $query = Client::query()
+            ->withCount('adrese')
+            ->withExists([
+                'adrese as are_abonament'  => fn($q) => $q->whereHas('produs', fn($q2) => $q2->where('abonament', Produs::TIP_ABONAMENT)),
+                'adrese as are_filtre'     => fn($q) => $q->whereHas('produs', fn($q2) => $q2->where('abonament', Produs::TIP_FILTRE)),
+                'adrese as are_per_bucata' => fn($q) => $q->whereHas('produs', fn($q2) => $q2->where('abonament', Produs::TIP_PER_BUCATA)),
+            ]);
 
         if ($this->cautare !== '') {
             $cautare = $this->cautare;
